@@ -9,6 +9,7 @@ src/__pycache__/*
 __pycache__/*
 
 results/
+venv/
 full_imputed_data/
 hiv_domain/hiv_results
 hiv_domain/*.pkl
