@@ -64,7 +64,7 @@ def epsilon_greedy_action_batch(state_tensor, qnet, epsilon, action_size):
     greedy_a = qnet.forward(
             state_tensor.type(FloatTensor)).detach().max(1)[1].view(-1, 1)
     random_a = LongTensor(np.random.random_integers(0,action_size-1,(batch_size,1)))
-    return (sample < epsilon)*random_a + (sample >= epsilon)*greedy_a
+    return torch.tensor(np.array(sample < epsilon, dtype = int))*random_a + torch.tensor(np.array(sample >= epsilon, dtype = int))*greedy_a
 
 
 def epsilon_greedy_action(state_tensor, qnet, epsilon, action_size, q_values=None):
