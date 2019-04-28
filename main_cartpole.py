@@ -9,6 +9,7 @@ from collections import deque
 
 # if gpu is to be used
 use_cuda = torch.cuda.is_available()
+print(use_cuda)
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor
@@ -18,9 +19,9 @@ Tensor = FloatTensor
 if __name__ == "__main__":
     env = gym.make("CartPole-v0")
     config = cartpole_config
-    eval_qnet = QNet(config.state_dim,config.dqn_hidden_dims,config.action_size)
-    load_qnet(eval_qnet,filename='qnet_cp_short.pth.tar')
-    eval_qnet.eval()
+    eval_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
+    load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar')
+    eval_qnet.eval() # 読み込んだモデルのモードを切り替える
 
     methods = ['Model', 'DR', 'WDR', 'Soft DR', 'Soft WDR',
                'Model Bsl', 'DR Bsl', 'WDR Bsl', 'Soft DR Bsl', 'Soft WDR Bsl',
@@ -34,9 +35,9 @@ if __name__ == "__main__":
     mse = [deque() for method in methods]
     ind_mse = [deque() for method in methods]
 
-    for i_run in range(config.N):
+    for i_run in range(config.N): # N回評価する
         print('Run: {}'.format(i_run+1))
-        results, target = train_pipeline(env,config,eval_qnet)
+        results, target = train_pipeline(env, config, eval_qnet)
         for i_method in range(num_method):
             mse_1, mse_2 = error_info(results[i_method], target, methods[i_method].ljust(max_name_length))
             mse[i_method].append(mse_1)

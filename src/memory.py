@@ -31,8 +31,9 @@ class TrajectorySet(object):
 # This is the data structure we use to train our MDPnet
 # The trick is we store all transition tuples on the same step together, so that when we sample from dataset,
 #   we guarantee that the same mini-batch is on the sample time step, which allow us to compute IPM more efficiently
-class SampleSet(object):
+class SampleSet(object): # configを渡されてる
     def __init__(self, args):
+        # configから設定を抜く
         self.max_len = args.max_length
         self.num_episode = 0
         self.factual = np.zeros(self.max_len)

@@ -34,12 +34,12 @@ class cartpole_config():
 
     # model training parameter
     print_per_epi = 10
-    train_num_episodes = 100
-    train_num_batches = 100
+    train_num_episodes = 20 #100
+    train_num_batches = 20 #100
     train_batch_size = 64
     test_batch_size = 16
-    tc_num_episode = 100
-    tc_num_batches = 100
+    tc_num_episode = 10 #100
+    tc_num_batches = 20 #100
     tc_batch_size = 64
     tc_test_batch_size = 16
     lr = 0.01
@@ -50,15 +50,15 @@ class cartpole_config():
     # MRDR parameter
     soften_epsilon = 0.02
     mrdr_lr = 0.01
-    mrdr_num_episodes = 100
-    mrdr_num_batches = 100
+    mrdr_num_episodes = 20 #100
+    mrdr_num_batches = 20 #100
     mrdr_batch_size = 1000
-    mrdr_test_batch_size = 100
+    mrdr_test_batch_size = 20 #100
     mrdr_hidden_dims = [32]
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 100
+    N = 2 #should be 100
     MAX_SEED = 1000000
 
 

@@ -60,11 +60,26 @@ def select_maxq_action(state_tensor, qnet):
 
 def epsilon_greedy_action_batch(state_tensor, qnet, epsilon, action_size):
     batch_size = state_tensor.size()[0]
+
+    # greedy/randomを決める為の乱数を生成
     sample = np.random.random([batch_size,1])
+
+    # state_tensorの各配列内での最大値を持つindexを返す（各バッチでの最大値を持つ腕の抽出
     greedy_a = qnet.forward(
             state_tensor.type(FloatTensor)).detach().max(1)[1].view(-1, 1)
+
+    # 各バッチでランダムに腕を選択
     random_a = LongTensor(np.random.random_integers(0,action_size-1,(batch_size,1)))
-    return torch.tensor(np.array(sample < epsilon, dtype = int))*random_a + torch.tensor(np.array(sample >= epsilon, dtype = int))*greedy_a
+
+    # 各バッチで乱数がepsilon以下であるかを確認
+    out_a = LongTensor(np.array(sample < epsilon, dtype = int))
+    out_c = LongTensor(np.array(sample >= epsilon, dtype=int))
+    # 確認結果と greedy/random の結果を掛ける
+    out_b = out_a * random_a
+    out_d = out_c * greedy_a
+    return out_b + out_d
+    # original code
+    #return torch.tensor(np.array(sample < epsilon, dtype = int))*random_a + torch.tensor(np.array(sample >= epsilon, dtype = int))*greedy_a
 
 
 def epsilon_greedy_action(state_tensor, qnet, epsilon, action_size, q_values=None):
@@ -83,7 +98,7 @@ def epsilon_greedy_action_prob(state_tensor, qnet, epsilon, action_size, q_value
     max_action = q_values.max(1)[1].view(1, 1).item()
     prob = FloatTensor(1,action_size)
     prob.fill_(epsilon/action_size)
-    prob[0,max_action] = 1-epsilon+epsilon/action_size
+    prob[0,max_action] = 1 - epsilon + epsilon/action_size
     return prob
 
 

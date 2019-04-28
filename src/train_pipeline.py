@@ -449,30 +449,33 @@ def importance_sampling(traj_set, wis=False, soften=False):
     num_samples = len(traj_set)
     value = np.zeros(num_samples)
     weights = np.zeros(num_samples)
+
     for i_traj in range(num_samples):
         l = len(traj_set.trajectories[i_traj])
         if soften:
             weights[i_traj] = traj_set.trajectories[i_traj][l - 1].acc_soft_isweight[0].item()
         else:
-            weights[i_traj]=traj_set.trajectories[i_traj][l-1].acc_isweight[0].item()
+            weights[i_traj] = traj_set.trajectories[i_traj][l - 1].acc_isweight[0].item()
+
     if wis:
         weights = (weights*num_samples)/np.sum(weights)
 
     for i_traj in range(num_samples):
         l = len(traj_set.trajectories[i_traj])
         value[i_traj] = l*weights[i_traj]
+
     return value
 
 
 def mrdr_preprocess(traj_set, config):
     transitions = []
-    weights = np.zeros((len(traj_set),config.max_length,config.max_length))
-    weights_sum = np.zeros((config.max_length,config.max_length))
-    weights_num = np.zeros((config.max_length,config.max_length))
-    for i in range(len(traj_set)):
+    weights = np.zeros((len(traj_set), config.max_length, config.max_length))
+    weights_sum = np.zeros((config.max_length, config.max_length))
+    weights_num = np.zeros((config.max_length, config.max_length))
+    for i in range(len(traj_set)): # trajectory
         for n1 in range(config.max_length):
-            if n1 >= len(traj_set.trajectories[i]):
-                weights[i,n1:,:] = 0
+            if n1 >= len(traj_set.trajectories[i]): # i番目のtrajの長さよりも n1が大きい場合
+                weights[i,n1:,:] = 0 # weightを0にする
                 break
             for n2 in range(n1, config.max_length):
                 if n2 >= len(traj_set.trajectories[i]):
@@ -522,43 +525,45 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         # Initialize the environment and state
         randseed = seedvec[i_episode].item()
         env.seed(randseed)
-        state = preprocess_state(env.reset(), config.state_dim)
+        state = preprocess_state(env.reset(), config.state_dim) # stateを行列にしてtensor形式にする
         done = False
         n_steps = 0
         acc_soft_isweight = FloatTensor([1])
         acc_isweight = FloatTensor([1])
         factual = 1
         last_factual = 1
-        traj_set.new_traj()
+        traj_set.new_traj() # traj_setに新しいリストを追加
         while not done:
             # Select and perform an action
-            q_values = eval_qnet.forward(state.type(Tensor)).detach()
-            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values)
+            q_values = eval_qnet.forward(state.type(Tensor)).detach() # Q値の予測 detachは勾配が伝わらないようにする処理
+            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyで亜gくしょんを決定する
             p_pib = epsilon_greedy_action_prob(state, eval_qnet, config.behavior_epsilon,
                                                config.action_size, q_values)
             soft_pie = epsilon_greedy_action_prob(state, eval_qnet, config.soften_epsilon,
-                                               config.action_size, q_values)
-            p_pie = epsilon_greedy_action_prob(state, eval_qnet, 0, config.action_size, q_values)
+                                               config.action_size, q_values) # soften_epsilonを使った時の epsilon greedyの各腕の選択確率を返す
+            p_pie = epsilon_greedy_action_prob(state, eval_qnet, 0, config.action_size, q_values) # argmax
 
-            isweight = p_pie[:, action.item()] / p_pib[:,action.item()]
+            isweight = p_pie[:, action.item()] / p_pib[:,action.item()] # importance weightの算出 max選択肢以外は０
             acc_isweight = acc_isweight * (p_pie[:, action.item()] / p_pib[:, action.item()])
-            soft_isweight = (soft_pie[:, action.item()] / p_pib[:, action.item()])
+            soft_isweight = (soft_pie[:, action.item()] / p_pib[:, action.item()]) # soften_epsilonを使った時の IW
             acc_soft_isweight = acc_soft_isweight * (soft_pie[:, action.item()] / p_pib[:, action.item()])
 
             last_factual = factual * (1 - p_pie[:, action.item()]) # 1{a_{0:t-1}==\pie, a_t != \pie}
             factual = factual * p_pie[:, action.item()] # 1{a_{0:t}==\pie}
 
-            next_state, reward, done, _ = env.step(action.item())
-            reward = Tensor([reward])
-            next_state = preprocess_state(next_state, config.state_dim)
-            next_state_re = torch.tensor(np.float32(config.rescale))*next_state
-            state_re = torch.tensor(np.float32(config.rescale))*state
+            next_state, reward, done, _ = env.step(action.item()) #action の実行 (doneはここで更新される）
+            reward = Tensor([reward]) #報酬をtensor形式にしておく
+            next_state = preprocess_state(next_state, config.state_dim) #次のstateの保存形式を変更
+            next_state_re = torch.tensor(np.float32(config.rescale))*next_state #stateをrescaleする
+            state_re = torch.tensor(np.float32(config.rescale))*state #stateをrescaleする
+
             if i_episode < config.train_num_traj:
                 memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                             last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
             else:
                 dev_memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                                 last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
             traj_set.push(state, action, next_state, reward, done, isweight, acc_isweight, n_steps, factual,
                           last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
             state = FloatTensor(next_state)
@@ -577,9 +582,9 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     time_sampling = time_now-time_pre
     time_pre = time_now
 
-    mrdr_samples = mrdr_preprocess(traj_set, config)
+    mrdr_samples = mrdr_preprocess(traj_set, config) # 保存したtrajectoriesをmrdrの学習でーたに変換する
     total_num = len(mrdr_samples)
-    mrdr_train_samples = mrdr_samples[: int(total_num*0.9)]
+    mrdr_train_samples = mrdr_samples[: int(total_num*0.9)] #90%のデータを学習に使う
     mrdr_dev_samples = mrdr_samples[int(total_num*0.9) :]
     time_now = time.time()
     time_premrdr = time_now - time_pre
@@ -587,28 +592,32 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
     print('Learn MRDR Q functions')
     best_train_loss = 10000
-    lr = config.mrdr_lr
+    lr = config.mrdr_lr # learning rate?
     optimizer = optim.Adam(mrdr_q.parameters(), lr=lr)
     for i_episode in range(config.mrdr_num_episodes):
         train_loss = 0
         dev_loss = 0
-        train_permutation = np.random.permutation(len(mrdr_train_samples))
+        train_permutation = np.random.permutation(len(mrdr_train_samples)) #順番をシャッフル？
         dev_permutation = np.random.permutation(len(mrdr_dev_samples))
+
         for i_batch in range(config.mrdr_num_batches):
             train_loss_batch = mrdr_train(mrdr_train_samples, mrdr_q, optimizer,
-                                          'd', config, train_permutation, i_batch, wis_reward=False)
+                                          'd', config, train_permutation, i_batch, wis_reward = False)
             dev_loss_batch = mrdr_test(mrdr_dev_samples, mrdr_q,
-                                       'd', config, dev_permutation, i_batch, wis_reward=False)
+                                       'd', config, dev_permutation, i_batch, wis_reward = False)
             train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
             dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
         if (i_episode + 1) % config.print_per_epi == 0:
             print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}, lr={}'
                   .format(i_episode + 1, train_loss, dev_loss, lr))
+
         if train_loss < best_train_loss:
             best_train_loss = train_loss
         else:
             lr *= 0.9
             learning_rate_update(optimizer, lr)
+
     time_now = time.time()
     time_mrdr = time_now - time_pre
     time_pre = time_now
