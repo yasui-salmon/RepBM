@@ -322,18 +322,21 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
     while not (sum(done.long() == batch_size) or n_steps >= maxlength):
         if n_steps > 0:
             actions = epsilon_greedy_action_batch(states, policy_qnet, epsilon, action_size)
-        states_re = Tensor( torch.tensor(np.float32(config.rescale))*torch.tensor(states))
-        states_diff, reward, _ = mdpnet.forward(states_re.type(Tensor))
+
+        states_re = Tensor( torch.tensor(np.float32(config.rescale))*torch.tensor(states)) # rescale state
+        states_diff, reward, _ = mdpnet.forward(states_re.type(Tensor)) # result of prediction?
         states_diff = states_diff.detach()
         reward = reward.detach().gather(1, actions).squeeze()
         expanded_actions = actions.unsqueeze(2)
         expanded_actions = expanded_actions.expand(-1, -1, state_dim)
+
         states_diff = states_diff.gather(1, expanded_actions).squeeze()
         states_diff = states_diff.view(-1, config.state_dim)
         states_diff = 1 / torch.tensor(np.float32(config.rescale)) * states_diff
         next_states = states_diff + torch.tensor(states)
         states = next_states
-        t_reward = t_reward + (1 - done).float() * reward
+
+        t_reward = t_reward + (1 - done).float() * reward # total rewardに報酬を加算。 trajectoryが終わったときにはrewardには加算されない。
         done = done | (is_done.forward(states.type(Tensor)).detach()[:, 0] > 0)
         n_steps += 1
     value = t_reward.numpy()
@@ -353,11 +356,13 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
 
     for i_traj in range(num_samples):
         traj_len[i_traj] = len(traj_set.trajectories[i_traj])
-        state_tensor[i_traj,0:traj_len[i_traj],:] = torch.cat([ t.state for t in traj_set.trajectories[i_traj] ])
-        action_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.action for t in traj_set.trajectories[i_traj]])
+        state_tensor[i_traj,0:traj_len[i_traj],:] = torch.cat([ t.state for t in traj_set.trajectories[i_traj] ]) # trajectoryからstateだけ取り出す
+        action_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.action for t in traj_set.trajectories[i_traj]]) # trajectoryからactionだけ取り出す
         done_tensor[i_traj, 0:traj_len[i_traj] ].fill_(0)
+
         if traj_len[i_traj] < config.max_length:
-            done_tensor[i_traj, traj_len[i_traj] :].fill_(1)
+            done_tensor[i_traj, traj_len[i_traj] :].fill_(1) #まだ終わってないところは１にしておく
+
         if soften:
             pie_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.soft_pie for t in traj_set.trajectories[i_traj]])
 
@@ -370,6 +375,7 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
                 nonzero_is[t.time] += 1
             w *= t.isweight[0]
 
+    # V,Qをすべてのtrajectoryのi_step目で算出する
     for i_step in range(config.max_length):
         # if nonzero_is[i_step] == 0:
         #     break
@@ -415,19 +421,21 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
 
 def doubly_robust(traj_set, V_value, Q_value, config, wis=False, soften=False):
     num_samples = len(traj_set)
-    weights = np.zeros((num_samples,config.max_length))
+    weights = np.zeros((num_samples, config.max_length))
     weights_sum = np.zeros(config.max_length)
 
     for i_traj in range(num_samples):
         for n in range(config.max_length):
-            if n >= len(traj_set.trajectories[i_traj]):
+            if n >= len(traj_set.trajectories[i_traj]): # trajectoryの長さを超えたらbreak
                 weights[i_traj:,n] = weights[i_traj,n-1]
                 break
             if soften:
                 weights[i_traj,n] = traj_set.trajectories[i_traj][n].acc_soft_isweight[0].item()
             else:
+                # あるtrajectory i_traj における step n においてのimportance samplingをweightに保存する
                 weights[i_traj,n] = traj_set.trajectories[i_traj][n].acc_isweight[0].item()
 
+    # WISの場合にはtrajectoryで得られた重みを合計した値で重みを割る
     if wis:
         for n in range(config.max_length):
             weights_sum[n] = np.sum(weights[:,n])
@@ -438,6 +446,10 @@ def doubly_robust(traj_set, V_value, Q_value, config, wis=False, soften=False):
     for i_traj in range(num_samples):
         w = 1
         for t in traj_set.trajectories[i_traj]:
+            # trajectory i_traj のstep tでVを計算する
+            # t.reward[0].item() : ログ上の報酬
+            # Q_value[i_traj,t.time] : Qの予測値
+            # V_value[i_traj,t.time] : V
             value[i_traj] += weights[i_traj,t.time]*(t.reward[0].item() - Q_value[i_traj,t.time]) + w*V_value[i_traj,t.time]
             w = weights[i_traj,t.time]
             if w == 0:
@@ -772,6 +784,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
     V,Q = compute_values(traj_set, mdpnet, tc, eval_qnet, config, model_type='MDP')
     dr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+    #ここに追加？
     wdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
