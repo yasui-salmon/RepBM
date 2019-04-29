@@ -317,6 +317,7 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
         actions = epsilon_greedy_action_batch(states, policy_qnet, epsilon, action_size)
     else:
         actions = init_actions
+
     n_steps = 0
     t_reward = torch.zeros(batch_size)
     while not (sum(done.long() == batch_size) or n_steps >= maxlength):
@@ -339,6 +340,7 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
         t_reward = t_reward + (1 - done).float() * reward # total rewardに報酬を加算。 trajectoryが終わったときにはrewardには加算されない。
         done = done | (is_done.forward(states.type(Tensor)).detach()[:, 0] > 0)
         n_steps += 1
+
     value = t_reward.numpy()
     value = np.reshape(value,[num_rollout,ori_batch_size])
     return np.mean(value,0)
@@ -379,7 +381,7 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
     for i_step in range(config.max_length):
         # if nonzero_is[i_step] == 0:
         #     break
-        if model_type == 'MDP':
+        if model_type == 'MDP': # weighted doubly robustとかが使うっぽい？
             if soften:
                 V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=config.soften_epsilon, action_size=config.action_size,
@@ -402,18 +404,30 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
                                                    maxlength=config.max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step],
                                                    init_actions=action_tensor[:, i_step, :])
-        elif model_type == 'Q':
+
+        elif model_type == 'Q': # doubly robustはこっちを使用
             times = Tensor(num_samples,1).fill_(i_step)/config.max_length
+
+            # i_step目のq_valueをすべてのtrajectoryで予測
             q_values = model.forward(state_tensor[:, i_step, :], times).detach()*config.max_length
+
+            # i_step目のcf policyの行動
             pie_actions = epsilon_greedy_action_batch(state_tensor[:, i_step, :], policy_qnet, 0, config.action_size)
+
             if soften:
                 zeros_actions = LongTensor(num_samples, 1).zero_()
                 ones_actions = 1-zeros_actions
                 V_value[:, i_step] = pie_tensor[:, i_step, 0] * q_values.gather(1, zeros_actions).squeeze() \
                                      + pie_tensor[:, i_step, 1] * q_values.gather(1, ones_actions).squeeze()
             else:
+                # Immediate Reward
+                # pie_actionsで指定されたindexをq_valueから取り出す
                 V_value[:, i_step] = q_values.gather(1, pie_actions).squeeze()
-            Q_value[:, i_step] = q_values.gather(1,action_tensor[:, i_step, :]).squeeze()
+
+            # Q-value
+            # action_tensor(実際にログデータ上に残っているaction)で指定されたindexをq_valueから取り出す
+            Q_value[:, i_step] = q_values.gather(1, action_tensor[:, i_step, :]).squeeze()
+
         elif model_type == 'IS':
             pass
     return V_value, Q_value
@@ -450,8 +464,8 @@ def doubly_robust(traj_set, V_value, Q_value, config, wis=False, soften=False):
             # t.reward[0].item() : ログ上の報酬
             # Q_value[i_traj,t.time] : Qの予測値
             # V_value[i_traj,t.time] : V
-            value[i_traj] += weights[i_traj,t.time]*(t.reward[0].item() - Q_value[i_traj,t.time]) + w*V_value[i_traj,t.time]
-            w = weights[i_traj,t.time]
+            value[i_traj] += weights[i_traj, t.time]*(t.reward[0].item() - Q_value[i_traj, t.time]) + w*V_value[i_traj, t.time]
+            w = weights[i_traj, t.time]
             if w == 0:
                 break
     return value
@@ -521,7 +535,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     traj_set = TrajectorySet(config) # save the trajectory for doubly robust evaluation
     scores = deque()
     mdpnet_msepi = MDPnet(config)
-    mdpnet = MDPnet(config)
+    mdpnet = MDPnet(config) # doubly robustで使う
     mdpnet_unweight = MDPnet(config)
     mrdr_q = QtNet(config.state_dim,config.mrdr_hidden_dims,config.action_size)
     mrdrv2_q = QtNet(config.state_dim, config.mrdr_hidden_dims, config.action_size)
@@ -533,7 +547,10 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     if seedvec is None:
         seedvec = np.random.randint(0, config.MAX_SEED, config.sample_num_traj)
 
-    for i_episode in range(config.sample_num_traj):
+# 同じQ functionをつかって、
+    # greedyにやるのがevaluation policy
+    # epsilon greedyにやるのがbehavior policy
+    for i_episode in range(config.sample_num_traj): # 評価trajectoryの作成
         # Initialize the environment and state
         randseed = seedvec[i_episode].item()
         env.seed(randseed)
@@ -548,7 +565,10 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         while not done:
             # Select and perform an action
             q_values = eval_qnet.forward(state.type(Tensor)).detach() # Q値の予測 detachは勾配が伝わらないようにする処理
-            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyで亜gくしょんを決定する
+            # ここのactionはbehavior policyによるもの？
+            # q-valuesはNULLじゃないからqnetは使われない
+            # actionは結局trajectoryとして保存されるのでbehaviorっぽい
+            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyでactionを決定する
             p_pib = epsilon_greedy_action_prob(state, eval_qnet, config.behavior_epsilon,
                                                config.action_size, q_values)
             soft_pie = epsilon_greedy_action_prob(state, eval_qnet, config.soften_epsilon,

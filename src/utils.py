@@ -72,7 +72,7 @@ def epsilon_greedy_action_batch(state_tensor, qnet, epsilon, action_size):
     random_a = LongTensor(np.random.random_integers(0,action_size-1,(batch_size,1)))
 
     # 各バッチで乱数がepsilon以下であるかを確認
-    out_a = LongTensor(np.array(sample < epsilon, dtype = int))
+    out_a = LongTensor(np.array(sample < epsilon, dtype = int)) # 0 or 1
     out_c = LongTensor(np.array(sample >= epsilon, dtype=int))
     # 確認結果と greedy/random の結果を掛ける
     out_b = out_a * random_a

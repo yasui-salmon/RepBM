@@ -20,7 +20,7 @@ if __name__ == "__main__":
     env = gym.make("CartPole-v0")
     config = cartpole_config
     eval_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
-    load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar')
+    load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar') # target policy
     eval_qnet.eval() # 読み込んだモデルのモードを切り替える
 
     methods = ['Model', 'DR', 'WDR', 'Soft DR', 'Soft WDR',
