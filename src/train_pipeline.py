@@ -381,38 +381,39 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
     for i_step in range(config.max_length):
         # if nonzero_is[i_step] == 0:
         #     break
-        if model_type == 'MDP': # weighted doubly robustとかが使うっぽい？
+        if model_type == 'MDP': # doubly robustとかが使う
             if soften:
                 V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=config.soften_epsilon, action_size=config.action_size,
                                                    maxlength=config.max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step])
+
                 Q_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet,
                                                    epsilon=config.soften_epsilon, action_size=config.action_size,
                                                    maxlength=config.max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step],
                                                    init_actions=action_tensor[:, i_step, :])
-            else:
+            else: # doubly robustが利用(model = mdpnet)
                 V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=0, action_size=config.action_size,
                                                    maxlength=config.max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step])
+
                 Q_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
-                                                   policy_qnet,
-                                                   epsilon=0, action_size=config.action_size,
+                                                   policy_qnet, epsilon=0, action_size=config.action_size,
                                                    maxlength=config.max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step],
-                                                   init_actions=action_tensor[:, i_step, :])
+                                                   init_actions=action_tensor[:, i_step, :]) #Qの場合にはinit_actionsが付く
 
-        elif model_type == 'Q': # doubly robustはこっちを使用
+        elif model_type == 'Q':
             times = Tensor(num_samples,1).fill_(i_step)/config.max_length
 
-            # i_step目のq_valueをすべてのtrajectoryで予測
+            # i_step目のq_valueをmdp_netを使ってすべてのtrajectoryで予測
             q_values = model.forward(state_tensor[:, i_step, :], times).detach()*config.max_length
 
-            # i_step目のcf policyの行動
-            pie_actions = epsilon_greedy_action_batch(state_tensor[:, i_step, :], policy_qnet, 0, config.action_size)
+            # i_step目のcf policyの行動(greedyなので1 or 0)
+            pie_actions = epsilon_greedy_action_batch(state_tensor[:, i_step, :], policy_qnet, 0, config.action_size) # evaluation policy action
 
             if soften:
                 zeros_actions = LongTensor(num_samples, 1).zero_()
@@ -463,8 +464,8 @@ def doubly_robust(traj_set, V_value, Q_value, config, wis=False, soften=False):
             # trajectory i_traj のstep tでVを計算する
             # t.reward[0].item() : ログ上の報酬
             # Q_value[i_traj,t.time] : Qの予測値
-            # V_value[i_traj,t.time] : V
-            value[i_traj] += weights[i_traj, t.time]*(t.reward[0].item() - Q_value[i_traj, t.time]) + w*V_value[i_traj, t.time]
+            # V_value[i_traj,t.time] : Vの予測値
+            value[i_traj] += weights[i_traj, t.time] * (t.reward[0].item() - Q_value[i_traj, t.time]) + w*V_value[i_traj, t.time]
             w = weights[i_traj, t.time]
             if w == 0:
                 break
@@ -568,12 +569,12 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
             # ここのactionはbehavior policyによるもの？
             # q-valuesはNULLじゃないからqnetは使われない
             # actionは結局trajectoryとして保存されるのでbehaviorっぽい
-            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyでactionを決定する
+            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyでactionを決定する(behavior)
             p_pib = epsilon_greedy_action_prob(state, eval_qnet, config.behavior_epsilon,
-                                               config.action_size, q_values)
+                                               config.action_size, q_values) # epsilon greedy (behavior policy) return list of probability
             soft_pie = epsilon_greedy_action_prob(state, eval_qnet, config.soften_epsilon,
                                                config.action_size, q_values) # soften_epsilonを使った時の epsilon greedyの各腕の選択確率を返す
-            p_pie = epsilon_greedy_action_prob(state, eval_qnet, 0, config.action_size, q_values) # argmax
+            p_pie = epsilon_greedy_action_prob(state, eval_qnet, 0, config.action_size, q_values) # argmax(evaluation policy)
 
             isweight = p_pie[:, action.item()] / p_pib[:,action.item()] # importance weightの算出 max選択肢以外は０
             acc_isweight = acc_isweight * (p_pie[:, action.item()] / p_pib[:, action.item()])
@@ -589,13 +590,15 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
             next_state_re = torch.tensor(np.float32(config.rescale))*next_state #stateをrescaleする
             state_re = torch.tensor(np.float32(config.rescale))*state #stateをrescaleする
 
+            # train数に指定された数以下であればDR等のmdp modelの学習のためのデータをmemoryに保存しておく
+            # それ以上の場合にはdev_memoryに保存しておく
             if i_episode < config.train_num_traj:
                 memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                             last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
             else:
                 dev_memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                                 last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
-
+            # OPEに利用するデータ
             traj_set.push(state, action, next_state, reward, done, isweight, acc_isweight, n_steps, factual,
                           last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
             state = FloatTensor(next_state)
@@ -796,15 +799,16 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     time_eval = time_now - time_pre
     time_pre = time_now
 
+    #RepBM(proposed method)
     V,Q = compute_values(traj_set, mdpnet_msepi, tc, eval_qnet, config, model_type='MDP')
     dr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
 
+    # mdpnet = qvalue の算出に使われるモデル
     V,Q = compute_values(traj_set, mdpnet, tc, eval_qnet, config, model_type='MDP')
     dr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
-    #ここに追加？
     wdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
@@ -845,6 +849,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     time_dr = time_now - time_pre
     time_pre = time_now
 
+    # eval_qnetをonlineで動かして報酬性能を得る（oracle）
     for i_episode in range(config.sample_num_traj):
         values = deque()
         for i_trials in range(1):
