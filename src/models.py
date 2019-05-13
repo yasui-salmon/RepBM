@@ -94,12 +94,27 @@ class MDPnet(nn.Module):
         )
         self.reward = nn.Sequential(*mlp_layers)
 
+        # policy (learn pizero
+        mlp_layers = []
+        prev_hidden_size = self.rep_dim
+        for next_hidden_size in config.reward_hidden_dims:
+            mlp_layers.extend([
+                nn.Linear(prev_hidden_size, next_hidden_size),
+                nn.Tanh(),
+            ])
+            prev_hidden_size = next_hidden_size
+        mlp_layers.append(
+            nn.Linear(prev_hidden_size, config.action_size)
+        )
+        self.pizero = nn.Sequential(*mlp_layers)
+
     def forward(self,state):
-        rep = self.representation(state)
+        rep = self.representation(state) #stateを入力してrepresentationを得る
         next_state_diff = self.transition(rep).view(-1,self.config.action_size,self.config.state_dim)
         reward = self.reward(rep).view(-1,self.config.action_size)
+        pizero = self.pizero(rep).view(-1,self.config.action_size) #forward for pizero
         #soft_done = self.terminal(state)
-        return next_state_diff, reward, rep
+        return next_state_diff, reward, rep, pizero
 
     # oracle for cartpole, we should not use
     def get_isdone(self,state):

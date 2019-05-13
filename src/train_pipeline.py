@@ -159,10 +159,13 @@ def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     # columns of actions taken
     expanded_actions = actions.unsqueeze(2) # batch_size x 1 x 1
     expanded_actions = expanded_actions.expand(-1,-1,config.state_dim) # batch_size x 1 x state_dim
-    predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
+
+    #predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
+    predict_state_diff, predict_reward_value, rep, predict_pizero_value = mdpnet(states.type(Tensor)) #output pizero for DML
     # predict_state_diff = batch_size x 2 x state_dim
     predict_state_diff = predict_state_diff.gather(1, expanded_actions).squeeze() # batch_size x state_dim
     predict_reward_value = predict_reward_value.gather(1, actions).squeeze()
+    predict_pizero_value = predict_pizero_value.gather(1, actions).squeeze() #predict pizero for DML
 
     sum_factual = sum([t.factual[0] for t in transitions])
     sum_control = sum([t.last_factual[0] for t in transitions])
@@ -186,6 +189,10 @@ def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     elif loss_mode == 2: # MSE_pi: only MSE_pi, as an ablation study
         loss = weighted_mse_loss(predict_state_diff, states_diff, weights_2) \
                + weighted_mse_loss(predict_reward_value, reward, weights_2)
+    elif loss_mode == 3:
+        loss = torch.nn.MSELoss()(predict_state_diff, states_diff) \
+               + torch.nn.MSELoss()(predict_reward_value, reward) \
+             + torch.nnCrossEntropyLoss()(predict_pizero_value, actions) #added pizero prediction
     # Optimize the model
     optimizer.zero_grad()
     loss.backward()
@@ -226,9 +233,10 @@ def mdpmodel_test(memory, mdpnet, loss_mode, config):
     # columns of actions taken
     expanded_actions = actions.unsqueeze(2)
     expanded_actions = expanded_actions.expand(-1, -1, config.state_dim)
-    predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
+    predict_state_diff, predict_reward_value, rep, predict_pizero_value = mdpnet(states.type(Tensor))
     predict_state_diff = predict_state_diff.gather(1, expanded_actions).squeeze()
     predict_reward_value = predict_reward_value.gather(1, actions).squeeze()
+    predict_pizero_value = predict_pizero_value.gather(1, actions).squeeze()  # predict pizero for DML
 
     if sum_factual > 0 and sum_control > 0:
         factual_index = LongTensor([i for i, t in enumerate(transitions) if t.factual[0] == 1])
@@ -251,6 +259,11 @@ def mdpmodel_test(memory, mdpnet, loss_mode, config):
     elif loss_mode == 2:
         loss = weighted_mse_loss(predict_state_diff, states_diff, weights_2) \
                + weighted_mse_loss(predict_reward_value, reward, weights_2)
+    elif loss_mode == 3:
+        loss = torch.nn.MSELoss()(predict_state_diff, states_diff) \
+               + torch.nn.MSELoss()(predict_reward_value, reward) \
+             + torch.nnCrossEntropyLoss()(predict_pizero_value, actions) #added pizero prediction
+
     return loss.item()
 
 
@@ -325,7 +338,7 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
             actions = epsilon_greedy_action_batch(states, policy_qnet, epsilon, action_size)
 
         states_re = Tensor( torch.tensor(np.float32(config.rescale))*torch.tensor(states)) # rescale state
-        states_diff, reward, _ = mdpnet.forward(states_re.type(Tensor)) # result of prediction?
+        states_diff, reward, _, pizero = mdpnet.forward(states_re.type(Tensor)) # result of prediction?
         states_diff = states_diff.detach()
         reward = reward.detach().gather(1, actions).squeeze()
         expanded_actions = actions.unsqueeze(2)
@@ -346,7 +359,7 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
     return np.mean(value,0)
 
 
-def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MDP', soften=False):
+def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MDP', soften=False) #ここでpizeroの予測値を返す様にする
     num_samples = len(traj_set)
     traj_len = np.zeros(num_samples, 'int')
     state_tensor = FloatTensor(num_samples, config.max_length, config.state_dim).zero_()
@@ -394,7 +407,7 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
                                                    maxlength=config.max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step],
                                                    init_actions=action_tensor[:, i_step, :])
-            else: # doubly robustが利用(model = mdpnet)
+            else:
                 V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=0, action_size=config.action_size,
                                                    maxlength=config.max_length - i_step, config=config,
