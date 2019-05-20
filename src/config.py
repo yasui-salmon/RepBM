@@ -34,18 +34,24 @@ class cartpole_config():
 
     # model training parameter
     print_per_epi = 10
-    train_num_episodes = 20 #100
-    train_num_batches = 20 #100
+    train_num_episodes = 100 #100
+    train_num_batches = 100 #100
     train_batch_size = 64
     test_batch_size = 16
-    tc_num_episode = 10 #100
-    tc_num_batches = 20 #100
+    tc_num_episode = 100 #100
+    tc_num_batches = 100 #100
     tc_batch_size = 64
     tc_test_batch_size = 16
     lr = 0.01
     lr_decay = 0.9
     alpha_rep = 0.01
     weight_decay = 0
+
+    # policy net parameter
+    policy_train_num_episodes = 200 #100
+    policy_train_num_batches = 200 #100
+    policy_lr = 0.01
+
 
     # MRDR parameter
     soften_epsilon = 0.02
@@ -85,9 +91,9 @@ class cartpole_test_config():
     sample_capacity = 200000
 
     # model parameters
-    sample_num_traj = 10 #1024
-    train_num_traj = 8 #900
-    dev_num_traj = 2 #124
+    sample_num_traj = 1024 #1024
+    train_num_traj = 900 #900
+    dev_num_traj = 124 #124
     transition_input_dims = 4
     rep_hidden_dims = [16] # The last dim is the representation dim
     transition_hidden_dims = []
@@ -100,12 +106,12 @@ class cartpole_test_config():
     print_per_epi = 10
     train_num_episodes = 100
     train_num_batches = 100
-    train_batch_size = 4 #64
-    test_batch_size = 2 #16
+    train_batch_size = 64 #64
+    test_batch_size = 16 #16
     tc_num_episode = 100
     tc_num_batches = 100
-    tc_batch_size = 2 #64
-    tc_test_batch_size = 2 #16
+    tc_batch_size = 64 #64
+    tc_test_batch_size = 16 #16
     lr = 0.01
     lr_decay = 0.9
     alpha_rep = 0.01
