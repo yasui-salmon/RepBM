@@ -59,9 +59,15 @@ class SampleSet(object): # configを渡されてる
 
     def sample(self, batch_size):
         while True:
-            time = random.randint(0,self.max_len-1)
+            time = random.randint(0,self.max_len-1) #trajectoryの最大の長さを指定しているので、シャッフル
             if len(self.memory[time]) >= batch_size:
                 return random.sample(self.memory[time], batch_size)
+
+    def get(self, idx):
+        return(self.memory[idx])
+
+    def get_all(self):
+        return(self.allsamples)
 
     def sample_terminal(self, batch_size):
         if len(self.terminal) >= batch_size:

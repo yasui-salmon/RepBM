@@ -138,6 +138,7 @@ def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     # Adapted from pytorch tutorial example code
     if config.train_batch_size > len(memory):
         return
+
     transitions = memory.sample(config.train_batch_size)
     time = transitions[0].time
     ratio = 1/memory.u[time] if memory.u[time] != 0 else 0
@@ -148,8 +149,6 @@ def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     actions = torch.cat([t.action for t in transitions])  # batch_size x 1
     reward = torch.cat([t.reward for t in transitions])  # batch_size or batch_size x 1
     reward = reward.squeeze() # batch_size
-    #actions_label = actions.squeeze().float() #float変換しない場合 MSELossでは詰まる。が、そもそもMSEで良いのか？
-    actions_label = actions.squeeze().long()  # float変換しない場合 MSELossでは詰まる。が、そもそもMSEで良いのか？
 
     factual = torch.cat([t.factual for t in transitions])
     weights = FloatTensor(config.train_batch_size)
@@ -290,8 +289,6 @@ def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     #predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
     rep, predict_pizero_value = mdpnet(states.type(Tensor)) #output pizero for DML
     predict_pizero_value = predict_pizero_value#.gather(1, actions).squeeze() #predict pizero for DML
-
-    print(predict_pizero_value)
 
     sum_factual = sum([t.factual[0] for t in transitions])
     sum_control = sum([t.last_factual[0] for t in transitions])
@@ -457,19 +454,22 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
     return np.mean(value,0)
 
 
-def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MDP', soften=False): #ここでpizeroの予測値を返す様にする
+def compute_values(traj_set, model, is_done, policy_qnet, config, max_length , model_type='MDP', soften=False): #ここでpizeroの予測値を返す様にする
     num_samples = len(traj_set)
     traj_len = np.zeros(num_samples, 'int')
-    state_tensor = FloatTensor(num_samples, config.max_length, config.state_dim).zero_()
-    action_tensor = LongTensor(num_samples, config.max_length, 1).zero_()
-    pie_tensor = FloatTensor(num_samples, config.max_length, config.action_size).zero_()
-    done_tensor = ByteTensor(num_samples, config.max_length).fill_(1)
-    V_value = np.zeros((num_samples, config.max_length))
-    Q_value = np.zeros((num_samples, config.max_length))
+    state_tensor = FloatTensor(num_samples, max_length, config.state_dim).zero_()
+    action_tensor = LongTensor(num_samples, max_length, 1).zero_()
+    pie_tensor = FloatTensor(num_samples, max_length, config.action_size).zero_()
+    done_tensor = ByteTensor(num_samples, max_length).fill_(1)
+    V_value = np.zeros((num_samples, max_length))
+    Q_value = np.zeros((num_samples, max_length))
 
     for i_traj in range(num_samples):
         traj_len[i_traj] = len(traj_set.trajectories[i_traj])
-        state_tensor[i_traj,0:traj_len[i_traj],:] = torch.cat([ t.state for t in traj_set.trajectories[i_traj] ]) # trajectoryからstateだけ取り出す
+
+        stv = torch.cat([ t.state for t in traj_set.trajectories[i_traj] ])
+
+        state_tensor[i_traj,0:traj_len[i_traj],:] =  stv # trajectoryからstateだけ取り出す
         action_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.action for t in traj_set.trajectories[i_traj]]) # trajectoryからactionだけ取り出す
         done_tensor[i_traj, 0:traj_len[i_traj] ].fill_(0)
 
@@ -480,7 +480,7 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
             pie_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.soft_pie for t in traj_set.trajectories[i_traj]])
 
     # Cut off unnecessary computation: if a time step t
-    nonzero_is = np.zeros(config.max_length,'int')
+    nonzero_is = np.zeros(max_length,'int')
     for i_traj in range(num_samples):
         w = 1
         for t in traj_set.trajectories[i_traj]:
@@ -489,7 +489,7 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
             w *= t.isweight[0]
 
     # V,Qをすべてのtrajectoryのi_step目で算出する
-    for i_step in range(config.max_length):
+    for i_step in range(max_length):
         # if nonzero_is[i_step] == 0:
         #     break
         if model_type == 'MDP': # doubly robustとかが使う
@@ -497,32 +497,126 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, model_type='MD
                 V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet,
                                                    epsilon=config.soften_epsilon, action_size=config.action_size,
-                                                   maxlength=config.max_length - i_step, config=config,
+                                                   maxlength=max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step])
 
                 Q_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet,
                                                    epsilon=config.soften_epsilon, action_size=config.action_size,
-                                                   maxlength=config.max_length - i_step, config=config,
+                                                   maxlength=max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step],
                                                    init_actions=action_tensor[:, i_step, :])
             else:
                 V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=0, action_size=config.action_size,
-                                                   maxlength=config.max_length - i_step, config=config,
+                                                   maxlength=max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step])
 
                 Q_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=0, action_size=config.action_size,
-                                                   maxlength=config.max_length - i_step, config=config,
+                                                   maxlength=max_length - i_step, config=config,
                                                    init_done=done_tensor[:, i_step],
                                                    init_actions=action_tensor[:, i_step, :]) #Qの場合にはinit_actionsが付く
 
         elif model_type == 'Q':
-            times = Tensor(num_samples,1).fill_(i_step)/config.max_length
+            times = Tensor(num_samples,1).fill_(i_step)/max_length
 
             # i_step目のq_valueをmdp_netを使ってすべてのtrajectoryで予測
-            q_values = model.forward(state_tensor[:, i_step, :], times).detach()*config.max_length
+            q_values = model.forward(state_tensor[:, i_step, :], times).detach()*max_length
+
+            # i_step目のcf policyの行動(greedyなので1 or 0)
+            pie_actions = epsilon_greedy_action_batch(state_tensor[:, i_step, :], policy_qnet, 0, config.action_size) # evaluation policy action
+
+            if soften:
+                zeros_actions = LongTensor(num_samples, 1).zero_()
+                ones_actions = 1-zeros_actions
+                V_value[:, i_step] = pie_tensor[:, i_step, 0] * q_values.gather(1, zeros_actions).squeeze() \
+                                     + pie_tensor[:, i_step, 1] * q_values.gather(1, ones_actions).squeeze()
+            else:
+                # Immediate Reward
+                # pie_actionsで指定されたindexをq_valueから取り出す
+                V_value[:, i_step] = q_values.gather(1, pie_actions).squeeze()
+
+            # Q-value
+            # action_tensor(実際にログデータ上に残っているaction)で指定されたindexをq_valueから取り出す
+            Q_value[:, i_step] = q_values.gather(1, action_tensor[:, i_step, :]).squeeze()
+
+        elif model_type == 'IS':
+            pass
+    return V_value, Q_value
+
+
+def compute_values_dml(traj_set, model, is_done, policy_qnet, config, max_length , model_type='MDP', soften=False): #ここでpizeroの予測値を返す様にする
+
+    num_samples = len(traj_set)
+
+    traj_len = np.zeros(num_samples, 'int')
+    state_tensor = FloatTensor(num_samples, max_length, config.state_dim).zero_()
+    action_tensor = LongTensor(num_samples, max_length, 1).zero_()
+    pie_tensor = FloatTensor(num_samples, max_length, config.action_size).zero_()
+    done_tensor = ByteTensor(num_samples, max_length).fill_(1)
+    V_value = np.zeros((num_samples, max_length))
+    Q_value = np.zeros((num_samples, max_length))
+
+    for i_traj in range(num_samples):
+        traj_len[i_traj] = len(traj_set.trajectories[i_traj])
+
+        stv = torch.cat([ t.state for t in traj_set.trajectories[i_traj] ])
+
+        state_tensor[i_traj,0:traj_len[i_traj],:] =  stv # trajectoryからstateだけ取り出す
+        action_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.action for t in traj_set.trajectories[i_traj]]) # trajectoryからactionだけ取り出す
+        done_tensor[i_traj, 0:traj_len[i_traj] ].fill_(0)
+
+        if traj_len[i_traj] < config.max_length:
+            done_tensor[i_traj, traj_len[i_traj] :].fill_(1) #まだ終わってないところは１にしておく
+
+        if soften:
+            pie_tensor[i_traj, 0:traj_len[i_traj], :] = torch.cat([t.soft_pie for t in traj_set.trajectories[i_traj]])
+
+    # Cut off unnecessary computation: if a time step t
+    nonzero_is = np.zeros(max_length,'int')
+    for i_traj in range(num_samples):
+        w = 1
+        for t in traj_set.trajectories[i_traj]:
+            if w > 0:
+                nonzero_is[t.time] += 1
+            w *= t.isweight[0]
+
+    # V,Qをすべてのtrajectoryのi_step目で算出する
+    for i_step in range(max_length):
+        # if nonzero_is[i_step] == 0:
+        #     break
+        if model_type == 'MDP': # doubly robustとかが使う
+            if soften:
+                V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
+                                                   policy_qnet,
+                                                   epsilon=config.soften_epsilon, action_size=config.action_size,
+                                                   maxlength=max_length - i_step, config=config,
+                                                   init_done=done_tensor[:, i_step])
+
+                Q_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
+                                                   policy_qnet,
+                                                   epsilon=config.soften_epsilon, action_size=config.action_size,
+                                                   maxlength=max_length - i_step, config=config,
+                                                   init_done=done_tensor[:, i_step],
+                                                   init_actions=action_tensor[:, i_step, :])
+            else:
+                V_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
+                                                   policy_qnet, epsilon=0, action_size=config.action_size,
+                                                   maxlength=max_length - i_step, config=config,
+                                                   init_done=done_tensor[:, i_step])
+
+                Q_value[:, i_step] = rollout_batch(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
+                                                   policy_qnet, epsilon=0, action_size=config.action_size,
+                                                   maxlength=max_length - i_step, config=config,
+                                                   init_done=done_tensor[:, i_step],
+                                                   init_actions=action_tensor[:, i_step, :]) #Qの場合にはinit_actionsが付く
+
+        elif model_type == 'Q':
+            times = Tensor(num_samples,1).fill_(i_step)/max_length
+
+            # i_step目のq_valueをmdp_netを使ってすべてのtrajectoryで予測
+            q_values = model.forward(state_tensor[:, i_step, :], times).detach()*max_length
 
             # i_step目のcf policyの行動(greedyなので1 or 0)
             pie_actions = epsilon_greedy_action_batch(state_tensor[:, i_step, :], policy_qnet, 0, config.action_size) # evaluation policy action
@@ -583,8 +677,6 @@ def rollout_batch_pz(init_states, mdpnet, is_done, num_rollout, policy_qnet, eps
     # print(pizero_prob_mat) #loop 23くらいから予測値が全部同一になってくる
     pizero_prob_vec = pizero_prob_mat[[idx], [np.array(action_sq)]]
 
-    print(pizero_prob_vec)
-
     return pizero_prob_vec
 
 
@@ -620,7 +712,6 @@ def compute_pizero(traj_set, model, is_done, policy_qnet, config, model_type='MD
             w *= t.isweight[0]
 
     for i_step in range(config.max_length):
-        print(i_step)
         pizero_value[:, i_step] = rollout_batch_pz(state_tensor[:, i_step, :], model, is_done, config.eval_num_rollout,
                                                    policy_qnet, epsilon=config.soften_epsilon, action_size=config.action_size,
                                                    maxlength=config.max_length - i_step, config=config,
@@ -687,7 +778,7 @@ def dml_doubly_robust(traj_set, V_value, Q_value, pz, config, wis=False, soften=
 
             iw = eval_policy[action].item()/est_pizero
             acc_pz = acc_pz * iw
-            print(n, eval_policy[action].item(), est_pizero, iw, acc_pz, acc_w)
+            #print(n, eval_policy[action].item(), est_pizero, iw, acc_pz, acc_w)
             weights[i_traj, n] = acc_pz
 
     # WISの場合にはtrajectoryで得られた重みを合計した値で重みを割る
@@ -772,11 +863,19 @@ def mrdr_preprocess(traj_set, config):
 def train_pipeline(env, config, eval_qnet, seedvec = None):
     memory = SampleSet(config) # same the tuples for model training
     dev_memory = SampleSet(config)
+    pz_memory = SampleSet(config)
+
+    memory_k_one = SampleSet(config)
+    memory_k_two = SampleSet(config)
+    traj_k_one = TrajectorySet(config)
+    traj_k_two = TrajectorySet(config)
+
     traj_set = TrajectorySet(config) # save the trajectory for doubly robust evaluation
     scores = deque()
     mdpnet_msepi = MDPnet(config)
     mdpnet = MDPnet(config) # doubly robustで使う
     mdpnet_unweight = MDPnet(config)
+
     mrdr_q = QtNet(config.state_dim,config.mrdr_hidden_dims,config.action_size)
     mrdrv2_q = QtNet(config.state_dim, config.mrdr_hidden_dims, config.action_size)
     mdpnet_dml = Policynet(config)
@@ -795,7 +894,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         # Initialize the environment and state
         randseed = seedvec[i_episode].item()
         env.seed(randseed)
-        state = preprocess_state(env.reset(), config.state_dim) # stateを行列にしてtensor形式にする
+        state = preprocess_state(env.reset(), config.state_dim) # stateを行列にしてtensor形式にする i_episodeごとに環境をリセットしている
         done = False
         n_steps = 0
         acc_soft_isweight = FloatTensor([1])
@@ -803,6 +902,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         factual = 1
         last_factual = 1
         traj_set.new_traj() # traj_setに新しいリストを追加
+
         while not done:
             # Select and perform an action
             q_values = eval_qnet.forward(state.type(Tensor)).detach() # Q値の予測 detachは勾配が伝わらないようにする処理
@@ -840,16 +940,40 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
             else:
                 dev_memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                                 last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
+            # cross fitting memory and traj
+            fold_split_num = round(config.sample_num_traj/2)
+
+            if i_episode < fold_split_num:
+                memory_k_one.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+                            last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+            else:
+                memory_k_two.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+                            last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
+            #pizero用のmemory(memory + dev_memoryになる)
+            pz_memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+                            last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
             # OPEに利用するデータ
             traj_set.push(state, action, next_state, reward, done, isweight, acc_isweight, n_steps, factual,
                           last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
             state = FloatTensor(next_state)
             n_steps += 1
+
         scores.append(n_steps)
     memory.flatten() # prepare flatten data
     dev_memory.flatten()
+    memory_k_one.flatten()
+    memory_k_two.flatten()
+
     memory.update_u() # prepare u_{0:t}
     dev_memory.update_u()
+    memory_k_one.update_u()
+    memory_k_two.update_u()
+
+
     mean_score = np.mean(scores)
     print('Sampling {} trajectories, the mean survival time is {}'
           .format(config.sample_num_traj, mean_score))
@@ -948,7 +1072,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
             lr *= config.lr_decay
 
 
-    print('Learn mdpnet_dml model')
+    print('Learn pizero model')
     best_train_loss = 100
     lr = config.lr
     for i_episode in range(config.policy_train_num_episodes):
@@ -956,10 +1080,10 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         dev_loss = 0
         optimizer = optim.SGD(mdpnet_dml.parameters(), lr=config.policy_lr, weight_decay=config.weight_decay)
         for i_batch in range(config.policy_train_num_batches):
-            train_loss_batch = pzmodel_train(memory, mdpnet_dml, optimizer, 3, config)
-            dev_loss_batch = pzmodel_test(dev_memory, mdpnet_dml, 3, config)
+            train_loss_batch = pzmodel_train(pz_memory, mdpnet_dml, optimizer, 3, config)
+            #dev_loss_batch = pzmodel_test(dev_memory, mdpnet_dml, 3, config)
             train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
-            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+            #dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
         if (i_episode + 1) % config.print_per_epi == 0:
             print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'
                   .format(i_episode + 1, train_loss, dev_loss))
@@ -1064,9 +1188,111 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     time_pre = time_now
 
 
+
+    # -----------------
+    print('pizero estimation')
+    pz = compute_pizero(traj_set, mdpnet_dml, tc, eval_qnet, config)
+
+    print('cross fitting')
+    best_train_loss = 100
+    lr = config.lr
+
+    print(len(memory_k_two), len(memory_k_one))
+
+    # Learn fold2 and eval fold1
+    mdpnet_dml_crossfit_k_two = MDPnet(config)
+    for i_episode in range(100): #range(len(memory_k_two)):  # len(cross_idx)
+        train_loss = 0
+        dev_loss = 0
+        optimizer_two = optim.Adam(mdpnet_dml_crossfit_k_two.parameters(), lr=lr, weight_decay=config.weight_decay)
+        for i_batch in range(config.train_num_batches):
+            train_loss_batch = mdpmodel_train(memory_k_two, mdpnet_dml_crossfit_k_two, optimizer_two, 0, config)
+            train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+            dev_loss_batch = mdpmodel_test(memory_k_one, mdpnet_dml_crossfit_k_two, 0, config)
+            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
+        if (i_episode + 1) % config.print_per_epi == 0:
+            print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss, dev_loss))
+
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
+        else:
+            lr *= config.lr_decay
+
+    mdpnet_dml_crossfit_k_two.eval()
+    print("eval dr_dml_cross fold 1")
+
+
+    # Learn fold1 and eval fold2
+    best_train_loss = 100
+    print(lr, config.lr)
+    lr = config.lr
+    mdpnet_dml_crossfit_k_one = MDPnet(config)
+    for i_episode in range(100): #range(len(memory_k_two)):  # len(cross_idx)
+        train_loss = 0
+        dev_loss = 0
+        optimizer_one = optim.Adam(mdpnet_dml_crossfit_k_one.parameters(), lr=lr, weight_decay=config.weight_decay)
+        for i_batch in range(config.train_num_batches):
+            train_loss_batch = mdpmodel_train(memory_k_one, mdpnet_dml_crossfit_k_one, optimizer_one, 0, config)
+            train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+            dev_loss_batch = mdpmodel_test(memory_k_one, mdpnet_dml_crossfit_k_one, 0, config)
+            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
+        if (i_episode + 1) % config.print_per_epi == 0:
+            print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss, dev_loss))
+
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
+        else:
+            lr *= config.lr_decay
+
+    mdpnet_dml_crossfit_k_two.eval()
+    print("eval dr_dml_cross fold 2")
+
+    # calculate V,Q for fold = 2
+    V, Q = compute_values_dml(traj_set, mdpnet_dml_crossfit_k_two, tc, eval_qnet, config, max_length=config.max_length,
+                              model_type='MDP')
+
+    dml_dr_cross_k_one = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+    dml_dr_cross_wis_k_one = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
+    dml_dr_cross_estpz_k_one = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
+    dml_dr_cross_estpz_k_one_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+
+    # calculate V,Q for fold = 1
+    V, Q = compute_values_dml(traj_set, mdpnet_dml_crossfit_k_one, tc, eval_qnet, config, max_length=config.max_length,
+                          model_type='MDP')
+
+    dml_dr_cross_k_two = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+    dml_dr_cross_wis_k_two = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
+    dml_dr_cross_estpz_k_two = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
+    dml_dr_cross_estpz_k_two_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+
+    # prepare output
+    dml_dr_cross = dml_dr_cross_k_one
+    dml_dr_cross[fold_split_num:] = dml_dr_cross_k_two[fold_split_num:]
+    dml_dr_wis_cross = dml_dr_cross_wis_k_one
+    dml_dr_wis_cross[fold_split_num:] = dml_dr_cross_wis_k_two[fold_split_num:]
+    # using estimated pizero
+    dml_dr_cross_estpz = dml_dr_cross_estpz_k_one
+    dml_dr_cross_estpz_wis = dml_dr_cross_estpz_k_one_wis
+    dml_dr_cross_estpz[fold_split_num:] = dml_dr_cross_estpz_k_two[fold_split_num:]
+    dml_dr_cross_estpz_wis[fold_split_num:] = dml_dr_cross_estpz_k_two_wis[fold_split_num:]
+
+
+
+    time_now = time.time()
+    time_mdp = time_now - time_pre
+    time_pre = time_now
+
+    #-----------------
+
+
+
+
+
     #RepBM(proposed method)
     print("eval RepBM")
-    V,Q = compute_values(traj_set, mdpnet_msepi, tc, eval_qnet, config, model_type='MDP')
+    V,Q = compute_values(traj_set, mdpnet_msepi, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
     dr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
@@ -1074,7 +1300,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
     # mdpnet = qvalue の算出に使われるモデル
     print("eval doubly robust family")
-    V,Q = compute_values(traj_set, mdpnet, tc, eval_qnet, config, model_type='MDP')
+    V,Q = compute_values(traj_set, mdpnet, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
     dr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
@@ -1082,35 +1308,35 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
     #compute pizero
     print("eval dml")
-    pz = compute_pizero(traj_set, mdpnet_dml, tc, eval_qnet, config)
     dml_dr = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
     dml_dr_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
 
     print("eval dr_bsl")
-    V, Q = compute_values(traj_set, mdpnet_unweight, tc, eval_qnet, config, model_type='MDP')
+    V, Q = compute_values(traj_set, mdpnet_unweight, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
     dr_bsl = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wdr_bsl = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr_bsl = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swdr_bsl = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
 
     print("eval MoreRobust DR")
-    V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, model_type='Q')
+    V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q')
     mrdr_qv = V[:, 0]
     mrdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wmrdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
-    V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, model_type='Q', soften=True)
+
+    V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q', soften=True)
     smrdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swmrdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
 
-    V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, model_type='Q')
+    V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q')
     mrdrv2_qv = V[:, 0]
     mrdrv2 = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wmrdrv2 = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
-    V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, model_type='Q', soften=True)
+    V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q', soften=True)
     smrdrv2 = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swmrdrv2 = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
 
-    V, Q = compute_values(traj_set, None, None, eval_qnet, config, model_type='IS')
+    V, Q = compute_values(traj_set, None, None, eval_qnet, config, max_length = config.max_length, model_type='IS')
     ips = importance_sampling(traj_set)
     wis = importance_sampling(traj_set, wis=True)
     sis = importance_sampling(traj_set, wis=False, soften=True)
@@ -1123,6 +1349,12 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     time_now = time.time()
     time_dr = time_now - time_pre
     time_pre = time_now
+
+
+
+
+
+
 
     # eval_qnetをonlineで動かして報酬性能を得る（oracle）
     for i_episode in range(config.sample_num_traj):
@@ -1149,7 +1381,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
           '| Eval MDP: {:.3f}s | Eval DR: {:.3f}s | Eval: {:.3f}s |'
           .format(time_sampling, time_premrdr, time_mrdr, time_mdp, time_tc, time_eval, time_dr, time_gt))
     print('Target policy value:', np.mean(target))
-    results = [mv, dr, dml_dr, dml_dr_wis, wdr, sdr, swdr, mv_bsl, dr_bsl, wdr_bsl, sdr_bsl, swdr_bsl,
+    results = [mv, dr, dml_dr, dml_dr_wis, dml_dr_cross, dml_dr_wis_cross, dml_dr_cross_estpz, dml_dr_cross_estpz_wis, wdr, sdr, swdr, mv_bsl, dr_bsl, wdr_bsl, sdr_bsl, swdr_bsl,
                mv_msepi, dr_msepi, wdr_msepi, sdr_msepi, swdr_msepi,
                mrdr_qv, mrdr, wmrdr, smrdr, swmrdr, mrdrv2_qv, mrdrv2, wmrdrv2, smrdrv2, swmrdrv2,
                ips, wis, sis, swis, pdis, wpdis, spdis, swpdis]

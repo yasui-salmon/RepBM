@@ -36,7 +36,7 @@ class cartpole_config():
     print_per_epi = 10
     train_num_episodes = 100 #100
     train_num_batches = 100 #100
-    train_batch_size = 64
+    train_batch_size = 64 #64
     test_batch_size = 16
     tc_num_episode = 100 #100
     tc_num_batches = 100 #100
@@ -48,23 +48,23 @@ class cartpole_config():
     weight_decay = 0
 
     # policy net parameter
-    policy_train_num_episodes = 200 #100
-    policy_train_num_batches = 200 #100
-    policy_lr = 0.01
+    policy_train_num_episodes = 100 #100 or 1024
+    policy_train_num_batches = 100 #100
+    policy_lr = 0.05
 
 
     # MRDR parameter
     soften_epsilon = 0.02
     mrdr_lr = 0.01
-    mrdr_num_episodes = 20 #100
-    mrdr_num_batches = 20 #100
+    mrdr_num_episodes = 100 #100
+    mrdr_num_batches = 100 #100
     mrdr_batch_size = 1000
-    mrdr_test_batch_size = 20 #100
+    mrdr_test_batch_size = 100 #100
     mrdr_hidden_dims = [32]
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 2 #should be 100
+    N = 30 #should be 100
     MAX_SEED = 1000000
 
 

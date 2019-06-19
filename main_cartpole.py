@@ -23,7 +23,7 @@ if __name__ == "__main__":
     load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar') # target policy
     eval_qnet.eval() # 読み込んだモデルのモードを切り替える
 
-    methods = ['Model', 'DR', 'DML-DR', 'DML-DR-WIS', 'WDR', 'Soft DR', 'Soft WDR',
+    methods = ['Model', 'DR', 'DML-DR', 'DML-DR-WIS', 'DML_DR_CROSS', 'DML_DR_WIS_CROSS', 'DML_DR_CROSS_ESTPZ', 'DML_DR_CROSS_ESTPZ_WIS','WDR', 'Soft DR', 'Soft WDR',
                'Model Bsl', 'DR Bsl', 'WDR Bsl', 'Soft DR Bsl', 'Soft WDR Bsl',
                'Model MSE', 'DR MSE', 'WDR MSE', 'Soft DR MSE', 'Soft WDR MSE',
                'MRDR Q', 'MRDR', 'WMRDR', 'Soft MRDR', 'Soft WMRDR',
