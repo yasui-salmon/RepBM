@@ -867,8 +867,10 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
     memory_k_one = SampleSet(config)
     memory_k_two = SampleSet(config)
-    traj_k_one = TrajectorySet(config)
-    traj_k_two = TrajectorySet(config)
+    fold_num = 5
+    memory_k = [SampleSet(config) for i in range(fold_num)]
+    dev_memory_k = [SampleSet(config) for i in range(fold_num)]
+    fold_sample_num = int(np.round(config.sample_num_traj/fold_num))
 
     traj_set = TrajectorySet(config) # save the trajectory for doubly robust evaluation
     scores = deque()
@@ -950,6 +952,16 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
             else:
                 memory_k_two.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                             last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
+            # cross fitting memory for k fold
+            fold = int(np.trunc(i_episode/fold_sample_num))
+            fold_idx_list = np.arange(fold_num)
+            for memory_idx in fold_idx_list[fold_idx_list != fold]:
+                memory_k[memory_idx].push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+                            last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
+
+            dev_memory_k[fold].push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+                                    last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
 
             #pizero用のmemory(memory + dev_memoryになる)
             pz_memory.push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
@@ -1288,7 +1300,51 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
 
 
+    #k fold cross fitting
+    dml_dr_cross_k = np.zeros(config.sample_num_traj)
+    fold_indicator = np.trunc(np.arange(config.sample_num_traj)/fold_sample_num)
+    for fold_idx in range(fold_num):
+        fold_memory = memory_k[fold_idx]
+        fold_dev_memory = dev_memory_k[fold_idx]
+        fold_memory.flatten()
+        fold_memory.update_u()
+        fold_dev_memory.flatten()
+        fold_dev_memory.update_u()
 
+        best_train_loss = 100
+        lr = config.lr
+
+        mdpnet_dml_crossfit_k = MDPnet(config)
+
+        for i_episode in range(100): #range(len(memory_k_two)):  # len(cross_idx)
+            train_loss = 0
+            dev_loss = 0
+            optimizer_one = optim.Adam(mdpnet_dml_crossfit_k.parameters(), lr=lr, weight_decay=config.weight_decay)
+            for i_batch in range(config.train_num_batches):
+                train_loss_batch = mdpmodel_train(fold_memory, mdpnet_dml_crossfit_k, optimizer_one, 0, config)
+                train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+                dev_loss_batch = mdpmodel_test(fold_dev_memory, mdpnet_dml_crossfit_k, 0, config)
+                dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
+            if (i_episode + 1) % config.print_per_epi == 0:
+                print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss, dev_loss))
+
+            if train_loss < best_train_loss:
+                best_train_loss = train_loss
+            else:
+                lr *= config.lr_decay
+
+        mdpnet_dml_crossfit_k_two.eval()
+        print("eval dr_dml_cross fold " + str(fold_idx))
+
+        # calculate V,Q for fold = 2
+        V, Q = compute_values_dml(traj_set, mdpnet_dml_crossfit_k, tc, eval_qnet, config, max_length=config.max_length,
+                                  model_type='MDP')
+        dml_dr_cross_k_fold = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+        dml_dr_cross_k[fold_indicator == fold_idx] = dml_dr_cross_k_fold[fold_indicator == fold_idx]
+        del mdpnet_dml_crossfit_k
+
+    #-----------------
 
     #RepBM(proposed method)
     print("eval RepBM")
@@ -1381,7 +1437,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
           '| Eval MDP: {:.3f}s | Eval DR: {:.3f}s | Eval: {:.3f}s |'
           .format(time_sampling, time_premrdr, time_mrdr, time_mdp, time_tc, time_eval, time_dr, time_gt))
     print('Target policy value:', np.mean(target))
-    results = [mv, dr, dml_dr, dml_dr_wis, dml_dr_cross, dml_dr_wis_cross, dml_dr_cross_estpz, dml_dr_cross_estpz_wis, wdr, sdr, swdr, mv_bsl, dr_bsl, wdr_bsl, sdr_bsl, swdr_bsl,
+    results = [mv, dr, dml_dr_cross_k, dml_dr, dml_dr_wis, dml_dr_cross, dml_dr_wis_cross, dml_dr_cross_estpz, dml_dr_cross_estpz_wis, wdr, sdr, swdr, mv_bsl, dr_bsl, wdr_bsl, sdr_bsl, swdr_bsl,
                mv_msepi, dr_msepi, wdr_msepi, sdr_msepi, swdr_msepi,
                mrdr_qv, mrdr, wmrdr, smrdr, swmrdr, mrdrv2_qv, mrdrv2, wmrdrv2, smrdrv2, swmrdrv2,
                ips, wis, sis, swis, pdis, wpdis, spdis, swpdis]
