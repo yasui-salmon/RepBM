@@ -201,8 +201,20 @@ def pdist(X,Y):
 
 
 def error_info(estm, target, method_name):
+
+    mse_a = (np.mean(estm) - np.mean(target)) ** 2
+    mse_b = np.mean((estm - target) ** 2)
+
     print('{}: Mean value is {:.3f}±{:.3e}, mse of mean is {:.3e}, mse of individual is {:.3e}'
           .format(method_name, np.mean(estm), np.std(estm),
-                  (np.mean(estm) - np.mean(target)) ** 2, np.mean((estm - target) ** 2)))
-    return (np.mean(estm) - np.mean(target)) ** 2, np.mean((estm - target) ** 2)
+                  mse_a, mse_b))
+    return mse_a, mse_b
 
+def error_info_step(estm, target, step):
+    estm_step = estm[:step]
+    target_step = target[:step]
+
+    mse_a = (np.mean(estm_step) - np.mean(target_step)) ** 2
+    mse_b = np.mean((estm_step - target_step) ** 2)
+
+    return mse_a, mse_b
