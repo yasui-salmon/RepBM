@@ -21,16 +21,17 @@ class cartpole_config():
     sample_capacity = 200000
 
     # model parameters
-    sample_num_traj_eval = 1024
-    sample_num_traj = 1024 #1024
-    train_num_traj = 896 #900
+    fold_num = 4
+    sample_num_traj_eval = 512
+    sample_num_traj = 512 #1024
+    train_num_traj = 384 #900
     dev_num_traj = 128 #124
     transition_input_dims = 4
     rep_hidden_dims = [16] # The last dim is the representation dim
     transition_hidden_dims = []
     reward_hidden_dims = []
     terminal_hidden_dims = [32,32]
-    behavior_epsilon = 0.3 #0.2
+    behavior_epsilon = 0.2 #0.2
     eval_epsilon = 0.0
 
     # model training parameter
@@ -65,7 +66,7 @@ class cartpole_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 20 #should be 100
+    N = 100 #should be 100
     MAX_SEED = 1000000
 
 

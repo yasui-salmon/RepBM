@@ -6,7 +6,9 @@ from collections import deque
 import torch.optim as optim
 
 # if gpu is to be used
-use_cuda = torch.cuda.is_available()
+#use_cuda = torch.cuda.is_available()
+use_cuda = False
+
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor
@@ -301,7 +303,11 @@ def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
         loss_rep = 0
 
     # Compute loss
-    loss = torch.nn.CrossEntropyLoss()(predict_pizero_value, actions_label)  # added pizero prediction
+    #print(predict_pizero_value, actions_label)
+
+    m = torch.nn.LogSoftmax(dim=1)
+
+    loss = torch.nn.NLLLoss()(m(predict_pizero_value), actions_label)  # added pizero prediction
 
     # Optimize the model
     optimizer.zero_grad()
@@ -840,7 +846,6 @@ def doubly_robust_dml_chunk(traj_set, V_value, Q_value, mu_hat, config, wis=Fals
         discount_factor = 1
         discount_rate = 1
 
-        w_list = []
         imd_rwd_list = []
         discount_factor_list = []
         gamma_mu_list = []
@@ -850,14 +855,12 @@ def doubly_robust_dml_chunk(traj_set, V_value, Q_value, mu_hat, config, wis=Fals
 
         for t in traj_set.trajectories[i_traj]:
 
-            w = w * weights[i_traj, t.time]
             imd_rwd = imd_rwd + t.reward[0].item() * discount_factor
 
             gamma_mu = mu_hat[i_traj, t.time] * discount_factor
             gamma_q = Q_value[i_traj, t.time] * discount_factor
             gamma_v = V_value[i_traj, t.time] * discount_factor
 
-            w_list.append(w)
             imd_rwd_list.append(imd_rwd)
             discount_factor_list.append(discount_factor)
             gamma_mu_list.append(gamma_mu)
@@ -865,14 +868,14 @@ def doubly_robust_dml_chunk(traj_set, V_value, Q_value, mu_hat, config, wis=Fals
             gamma_v_list.append(gamma_v)
 
             if t.time == 0:
-                value_right = w * gamma_q
+                value_right = weights[i_traj, t.time] * gamma_q - gamma_v
             else:
-                value_right = w * ( np.sum(gamma_mu_list[:t.time] + gamma_q_list)  ) - w_list[np.int(t.time - 1)] * (np.sum(gamma_mu_list[:t.time] + gamma_v))
+                value_right = weights[i_traj, t.time] * ( np.sum(gamma_mu_list[:t.time] + gamma_q_list)  ) - weights[i_traj, np.int(t.time-1)] * (np.sum(gamma_mu_list[:t.time] + gamma_v))
 
             value_right_list.append(value_right)
             discount_factor = discount_factor ** discount_rate
 
-        value_left = np.prod(w_list) * np.sum(imd_rwd_list)
+        value_left = weights[i_traj, t.time] * np.sum(imd_rwd_list)
         value[i_traj] = (value_left - np.sum(value_right))
 
     return value
@@ -986,7 +989,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     dev_memory = SampleSet(config)
     pz_memory = SampleSet(config)
 
-    fold_num = 8
+    fold_num = config.fold_num
     memory_k = [SampleSet(config) for i in range(fold_num)]
     dev_memory_k = [SampleSet(config) for i in range(fold_num)]
 
@@ -1132,65 +1135,65 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     time_premrdr = time_now - time_pre
     time_pre = time_now
 
-    # print('Learn MRDR Q functions')
-    # best_train_loss = 10000
-    # lr = config.mrdr_lr # learning rate?
-    # optimizer = optim.Adam(mrdr_q.parameters(), lr=lr)
-    # for i_episode in range(config.mrdr_num_episodes):
-    #     train_loss = 0
-    #     dev_loss = 0
-    #     train_permutation = np.random.permutation(len(mrdr_train_samples)) #順番をシャッフル？
-    #     dev_permutation = np.random.permutation(len(mrdr_dev_samples))
-    #
-    #     for i_batch in range(config.mrdr_num_batches):
-    #         train_loss_batch = mrdr_train(mrdr_train_samples, mrdr_q, optimizer,
-    #                                       'd', config, train_permutation, i_batch, wis_reward = False)
-    #         dev_loss_batch = mrdr_test(mrdr_dev_samples, mrdr_q,
-    #                                    'd', config, dev_permutation, i_batch, wis_reward = False)
-    #         train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
-    #         dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
-    #
-    #     if (i_episode + 1) % config.print_per_epi == 0:
-    #         print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}, lr={}'
-    #               .format(i_episode + 1, train_loss, dev_loss, lr))
-    #
-    #     if train_loss < best_train_loss:
-    #         best_train_loss = train_loss
-    #     else:
-    #         lr *= 0.9
-    #         learning_rate_update(optimizer, lr)
-    #
-    # time_now = time.time()
-    # time_mrdr = time_now - time_pre
-    # time_pre = time_now
-    #
-    # print('Learn MRDR-WIS Q functions')
-    # best_train_loss = 10000
-    # lr = config.mrdr_lr
-    # optimizer = optim.Adam(mrdrv2_q.parameters(), lr=lr)
-    # for i_episode in range(config.mrdr_num_episodes):
-    #     train_loss = 0
-    #     dev_loss = 0
-    #     train_permutation = np.random.permutation(len(mrdr_train_samples))
-    #     dev_permutation = np.random.permutation(len(mrdr_dev_samples))
-    #     for i_batch in range(config.mrdr_num_batches):
-    #         train_loss_batch = mrdr_train(mrdr_train_samples, mrdrv2_q, optimizer,
-    #                                       'd', config, train_permutation, i_batch, wis_reward=True)
-    #         dev_loss_batch = mrdr_test(mrdr_dev_samples, mrdrv2_q,
-    #                                    'd', config, dev_permutation, i_batch, wis_reward=True)
-    #         train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
-    #         dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
-    #     if (i_episode + 1) % config.print_per_epi == 0:
-    #         print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}, lr={}'
-    #               .format(i_episode + 1, train_loss, dev_loss, lr))
-    #     if train_loss < best_train_loss:
-    #         best_train_loss = train_loss
-    #     else:
-    #         lr *= 0.9
-    #         learning_rate_update(optimizer, lr)
-    # time_now = time.time()
-    # time_mrdr += time_now - time_pre
-    # time_pre = time_now
+    print('Learn MRDR Q functions')
+    best_train_loss = 10000
+    lr = config.mrdr_lr # learning rate?
+    optimizer = optim.Adam(mrdr_q.parameters(), lr=lr)
+    for i_episode in range(config.mrdr_num_episodes):
+        train_loss = 0
+        dev_loss = 0
+        train_permutation = np.random.permutation(len(mrdr_train_samples)) #順番をシャッフル？
+        dev_permutation = np.random.permutation(len(mrdr_dev_samples))
+
+        for i_batch in range(config.mrdr_num_batches):
+            train_loss_batch = mrdr_train(mrdr_train_samples, mrdr_q, optimizer,
+                                          'd', config, train_permutation, i_batch, wis_reward = False)
+            dev_loss_batch = mrdr_test(mrdr_dev_samples, mrdr_q,
+                                       'd', config, dev_permutation, i_batch, wis_reward = False)
+            train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
+        if (i_episode + 1) % config.print_per_epi == 0:
+            print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}, lr={}'
+                  .format(i_episode + 1, train_loss, dev_loss, lr))
+
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
+        else:
+            lr *= 0.9
+            learning_rate_update(optimizer, lr)
+
+    time_now = time.time()
+    time_mrdr = time_now - time_pre
+    time_pre = time_now
+
+    print('Learn MRDR-WIS Q functions')
+    best_train_loss = 10000
+    lr = config.mrdr_lr
+    optimizer = optim.Adam(mrdrv2_q.parameters(), lr=lr)
+    for i_episode in range(config.mrdr_num_episodes):
+        train_loss = 0
+        dev_loss = 0
+        train_permutation = np.random.permutation(len(mrdr_train_samples))
+        dev_permutation = np.random.permutation(len(mrdr_dev_samples))
+        for i_batch in range(config.mrdr_num_batches):
+            train_loss_batch = mrdr_train(mrdr_train_samples, mrdrv2_q, optimizer,
+                                          'd', config, train_permutation, i_batch, wis_reward=True)
+            dev_loss_batch = mrdr_test(mrdr_dev_samples, mrdrv2_q,
+                                       'd', config, dev_permutation, i_batch, wis_reward=True)
+            train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+        if (i_episode + 1) % config.print_per_epi == 0:
+            print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}, lr={}'
+                  .format(i_episode + 1, train_loss, dev_loss, lr))
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
+        else:
+            lr *= 0.9
+            learning_rate_update(optimizer, lr)
+    time_now = time.time()
+    time_mrdr += time_now - time_pre
+    time_pre = time_now
 
     print('Learn mse_pi mdp model')
     best_train_loss = 100
@@ -1216,7 +1219,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     print('Learn pizero model')
     best_train_loss = 100
     lr = config.lr
-    for i_episode in range(config.policy_train_num_episodes):
+    for i_episode in range(100):
         train_loss = 0
         dev_loss = 0
         optimizer = optim.SGD(mdpnet_dml.parameters(), lr=config.policy_lr, weight_decay=config.weight_decay)
@@ -1234,25 +1237,25 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
             lr *= config.lr_decay
 
 
-    # print('Learn our mdp model')
-    # best_train_loss = 100
-    # lr = config.lr
-    # for i_episode in range(config.train_num_episodes):
-    #     train_loss = 0
-    #     dev_loss = 0
-    #     optimizer = optim.Adam(mdpnet.parameters(), lr=lr, weight_decay=config.weight_decay)
-    #     for i_batch in range(config.train_num_batches):
-    #         train_loss_batch = mdpmodel_train(memory, mdpnet, optimizer, 1, config)
-    #         dev_loss_batch = mdpmodel_test(dev_memory, mdpnet, 1, config)
-    #         train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
-    #         dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
-    #     if (i_episode + 1) % config.print_per_epi == 0:
-    #         print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'
-    #               .format(i_episode + 1, train_loss, dev_loss))
-    #     if train_loss < best_train_loss:
-    #         best_train_loss = train_loss
-    #     else:
-    #         lr *= config.lr_decay
+    print('Learn our mdp model')
+    best_train_loss = 100
+    lr = config.lr
+    for i_episode in range(config.train_num_episodes):
+        train_loss = 0
+        dev_loss = 0
+        optimizer = optim.Adam(mdpnet.parameters(), lr=lr, weight_decay=config.weight_decay)
+        for i_batch in range(config.train_num_batches):
+            train_loss_batch = mdpmodel_train(memory, mdpnet, optimizer, 1, config)
+            dev_loss_batch = mdpmodel_test(dev_memory, mdpnet, 1, config)
+            train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+        if (i_episode + 1) % config.print_per_epi == 0:
+            print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'
+                  .format(i_episode + 1, train_loss, dev_loss))
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
+        else:
+            lr *= config.lr_decay
 
     print('Learn the baseline mdp model')
     best_train_loss = 100
@@ -1318,10 +1321,14 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         env.seed(seedvec[i_episode].item())
         init_states.append(preprocess_state(env.reset(), config.state_dim))
     init_states = torch.cat(init_states)
+
+    # RepBM model with representation loss
     mv = rollout_batch(init_states, mdpnet, tc, config.eval_num_rollout, eval_qnet,
                       epsilon=0, action_size=config.action_size, maxlength=config.max_length, config=config)
+    # Usual MDP model
     mv_bsl = rollout_batch(init_states, mdpnet_unweight, tc, config.eval_num_rollout, eval_qnet,
                           epsilon=0, action_size=config.action_size, maxlength=config.max_length, config=config)
+    # RepBM model without representation loss
     mv_msepi = rollout_batch(init_states, mdpnet_msepi, tc, config.eval_num_rollout, eval_qnet,
                        epsilon=0, action_size=config.action_size, maxlength=config.max_length, config=config)
     time_now = time.time()
@@ -1343,7 +1350,8 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     dml_dr_cross_k_estpz_nd = np.zeros(config.sample_num_traj)
     dml_dr_cross_k_estpz_wis_nd = np.zeros(config.sample_num_traj)
     dml_dr_cross_k_chunk_nd = np.zeros(config.sample_num_traj)
-
+    dml_dr_cross_k_estpz_sis_nd = np.zeros(config.sample_num_traj)
+    dml_dr_cross_k_estpz_swis_nd = np.zeros(config.sample_num_traj)
 
     fold_indicator = np.trunc(np.arange(config.sample_num_traj) / fold_sample_num)
     for fold_idx in range(fold_num):
@@ -1408,6 +1416,19 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         dml_dr_cross_k_estpz_wis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_wis[
             fold_indicator == fold_idx]
 
+        # doubly robust with self normalized estimated ps for fold = k
+        dml_dr_cross_estpz_k_fold_sis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
+        dml_dr_cross_k_estpz_sis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_sis[
+            fold_indicator == fold_idx]
+
+        # doubly robust with self normalized estimated ps for fold = k
+        dml_dr_cross_estpz_k_fold_swis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
+        dml_dr_cross_k_estpz_swis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_swis[
+            fold_indicator == fold_idx]
+
+
+
+
 
         # doubly robust estimate for fold = k (chunk)
         dml_dr_cross_k_fold_chunk_nd = doubly_robust_dml_chunk(traj_set, V, Q, mu_hat, config, wis=False, soften=False)
@@ -1419,25 +1440,28 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
 
     #RepBM(proposed method)
-    # print("eval RepBM")
-    # V,Q = compute_values(traj_set, mdpnet_msepi, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
-    # dr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
-    # wdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
-    # sdr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
-    # swdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
+    print("eval RepBM") # RepBM without representation
+    V,Q = compute_values(traj_set, mdpnet_msepi, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
+    dr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+    wdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
+    sdr_msepi = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
+    swdr_msepi = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
+    dr_msepi_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
+    wdr_msepi_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+    sdr_msepi_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
+    swdr_msepi_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
 
     # mdpnet = qvalue の算出に使われるモデル
-    print("eval doubly robust family")
+    # RepBM with representation
     V,Q = compute_values(traj_set, mdpnet, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
     dr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
     wdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
     sdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
     swdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
-
-    #compute pizero
-    print("eval dml")
-    dml_dr = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
-    dml_dr_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+    dr_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
+    wdr_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+    sdr_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
+    swdr_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
 
     print("eval dr_bsl")
     V, Q = compute_values(traj_set, mdpnet_unweight, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
@@ -1450,23 +1474,23 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     wdr_bsl_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
 
 
-    # print("eval MoreRobust DR")
-    # V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q')
-    # mrdr_qv = V[:, 0]
-    # mrdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
-    # wmrdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
-    #
-    # V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q', soften=True)
-    # smrdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
-    # swmrdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
-    #
-    # V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q')
-    # mrdrv2_qv = V[:, 0]
-    # mrdrv2 = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
-    # wmrdrv2 = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
-    # V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q', soften=True)
-    # smrdrv2 = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
-    # swmrdrv2 = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
+    print("eval MoreRobust DR")
+    V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q')
+    mrdr_qv = V[:, 0]
+    mrdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+    wmrdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
+
+    V, Q = compute_values(traj_set, mrdr_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q', soften=True)
+    smrdr = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
+    swmrdr = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
+
+    V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q')
+    mrdrv2_qv = V[:, 0]
+    mrdrv2 = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+    wmrdrv2 = doubly_robust(traj_set, V, Q, config, wis=True, soften=False)
+    V, Q = compute_values(traj_set, mrdrv2_q, tc, eval_qnet, config, max_length = config.max_length, model_type='Q', soften=True)
+    smrdrv2 = doubly_robust(traj_set, V, Q, config, wis=False, soften=True)
+    swmrdrv2 = doubly_robust(traj_set, V, Q, config, wis=True, soften=True)
 
     V, Q = compute_values(traj_set, None, None, eval_qnet, config, max_length = config.max_length, model_type='IS')
     ips = importance_sampling(traj_set)
@@ -1513,9 +1537,12 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     #       .format(time_sampling, time_premrdr, time_mrdr, time_mdp, time_tc, time_eval, time_dr, time_gt))
     print('Target policy value:', np.mean(target))
     results = [mv, dr,
-               dml_dr_cross_k_nd, dml_dr_cross_k_estpz_nd, dml_dr_cross_k_estpz_wis_nd, dml_dr_cross_k_chunk_nd,
+               dml_dr_cross_k_nd, dml_dr_cross_k_estpz_nd, dml_dr_cross_k_estpz_wis_nd, dml_dr_cross_k_estpz_sis_nd,dml_dr_cross_k_estpz_swis_nd, dml_dr_cross_k_chunk_nd,
                wdr, sdr, swdr, mv_bsl, dr_bsl, dr_bsl_estpz, wdr_bsl_estpz, wdr_bsl, sdr_bsl, swdr_bsl,
-               mv_msepi,
+               mv_msepi, dr_msepi, wdr_msepi, sdr_msepi, swdr_msepi,
+               dr_estpz, wdr_estpz, sdr_estpz, swdr_estpz,
+               dr_msepi_estpz, wdr_msepi_estpz, sdr_msepi_estpz, swdr_msepi_estpz,
+               mrdr_qv, mrdr, wmrdr, smrdr, swmrdr, mrdrv2_qv, mrdrv2, wmrdrv2, smrdrv2, swmrdrv2,
                ips, wis, sis, swis, pdis, wpdis, spdis, swpdis]
 
     # results = [mv, dr,
