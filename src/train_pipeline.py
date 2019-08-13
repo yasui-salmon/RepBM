@@ -990,8 +990,8 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     pz_memory = SampleSet(config)
 
     fold_num = config.fold_num
-    memory_k = [SampleSet(config) for i in range(fold_num)]
-    dev_memory_k = [SampleSet(config) for i in range(fold_num)]
+    rep_memory_k = [SampleSet(config) for i in range(fold_num)]
+    rep_dev_memory_k = [SampleSet(config) for i in range(fold_num)]
 
     nd_memory_k = [SampleSet(config) for i in range(fold_num)]
     nd_memory_test = [SampleSet(config) for i in range(fold_num)]
@@ -1089,15 +1089,15 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
                             last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
 
             # fold, dev_foldと一致しないkのみを残す
-            fold_idx_list_k = [x for x in fold_idx_list if x not in [fold, dev_fold]]
+            #fold_idx_list_k = [x for x in fold_idx_list if x not in [fold, dev_fold]]
 
             # fold, dev_foldでもない全てのmemoryにログを残す
             for memory_idx in fold_idx_list_k:
-                memory_k[memory_idx].push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+                rep_memory_k[memory_idx].push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                             last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
 
             # dev_foldのmemoryにログを残す
-            dev_memory_k[dev_fold].push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
+            rep_dev_memory_k[dev_fold].push(state_re, action, next_state_re, reward, done, isweight, acc_isweight, n_steps, factual,
                                     last_factual, acc_soft_isweight, soft_isweight, soft_pie, p_pie, p_pib)
 
             #pizero用のmemory(memory + dev_memoryになる)
@@ -1217,27 +1217,36 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
 
     print('Learn pizero model')
+    mdpnet_dml = Policynet(config)
     best_train_loss = 100
     lr = config.lr
+    dev_loss_vec = np.zeros(100)
     for i_episode in range(100):
         train_loss = 0
         dev_loss = 0
         optimizer = optim.SGD(mdpnet_dml.parameters(), lr=config.policy_lr, weight_decay=config.weight_decay)
         for i_batch in range(config.policy_train_num_batches):
-            train_loss_batch = pzmodel_train(pz_memory, mdpnet_dml, optimizer, 3, config)
-            #dev_loss_batch = pzmodel_test(dev_memory, mdpnet_dml, 3, config)
+            train_loss_batch = pzmodel_train(memory, mdpnet_dml, optimizer, 3, config)
+            dev_loss_batch = pzmodel_test(dev_memory, mdpnet_dml, 3, config)
             train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
-            #dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+            dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
         if (i_episode + 1) % config.print_per_epi == 0:
             print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'
                   .format(i_episode + 1, train_loss, dev_loss))
-        if train_loss < best_train_loss:
+
+        print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss, dev_loss))
+
+        dev_loss_vec[i_episode] = dev_loss
+
+        if (i_episode > 10) & (dev_loss_vec[i_episode - 10] < dev_loss):
             best_train_loss = train_loss
+            break
         else:
             lr *= config.lr_decay
 
 
-    print('Learn our mdp model')
+    print('Learn RepBM mdp model')
     best_train_loss = 100
     lr = config.lr
     for i_episode in range(config.train_num_episodes):
@@ -1353,6 +1362,9 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     dml_dr_cross_k_estpz_sis_nd = np.zeros(config.sample_num_traj)
     dml_dr_cross_k_estpz_swis_nd = np.zeros(config.sample_num_traj)
 
+    dml_dr_cross_k_nd_repbm = np.zeros(config.sample_num_traj)
+    dml_dr_cross_k_estpz_nd_repbm = np.zeros(config.sample_num_traj)
+
     fold_indicator = np.trunc(np.arange(config.sample_num_traj) / fold_sample_num)
     for fold_idx in range(fold_num):
 
@@ -1361,13 +1373,24 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         else:
             dev_fold = fold_idx + 1
 
+        # prepare memory
         fold_memory = nd_memory_k[fold_idx]
-        fold_dev_memory = nd_memory_test[dev_fold]
         fold_memory.flatten()
         fold_memory.update_u()
+
+        fold_dev_memory = nd_memory_test[dev_fold]
         fold_dev_memory.flatten()
         fold_dev_memory.update_u()
 
+        rep_fold_memory = rep_memory_k[fold_idx]
+        rep_fold_memory.flatten()
+        rep_fold_memory.update_u()
+
+        rep_dev_memory = rep_dev_memory_k[fold_idx]
+        rep_dev_memory.flatten()
+        rep_dev_memory.update_u()
+
+        # learning rate setting
         best_train_loss = 100
         lr = config.lr
 
@@ -1393,6 +1416,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
                 lr *= config.lr_decay
 
         mdpnet_dml_crossfit_k.eval()
+
         print("eval dr_dml_cross fold " + str(fold_idx))
 
         # calculate V,Q for fold = k
@@ -1413,29 +1437,71 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
         # doubly robust with self normalized estimated ps for fold = k
         dml_dr_cross_estpz_k_fold_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
-        dml_dr_cross_k_estpz_wis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_wis[
-            fold_indicator == fold_idx]
+        dml_dr_cross_k_estpz_wis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_wis[fold_indicator == fold_idx]
 
         # doubly robust with self normalized estimated ps for fold = k
         dml_dr_cross_estpz_k_fold_sis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
-        dml_dr_cross_k_estpz_sis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_sis[
-            fold_indicator == fold_idx]
+        dml_dr_cross_k_estpz_sis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_sis[fold_indicator == fold_idx]
 
         # doubly robust with self normalized estimated ps for fold = k
         dml_dr_cross_estpz_k_fold_swis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
-        dml_dr_cross_k_estpz_swis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_swis[
-            fold_indicator == fold_idx]
-
-
-
-
+        dml_dr_cross_k_estpz_swis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_fold_swis[fold_indicator == fold_idx]
 
         # doubly robust estimate for fold = k (chunk)
         dml_dr_cross_k_fold_chunk_nd = doubly_robust_dml_chunk(traj_set, V, Q, mu_hat, config, wis=False, soften=False)
         dml_dr_cross_k_chunk_nd[fold_indicator == fold_idx] = dml_dr_cross_k_fold_chunk_nd[fold_indicator == fold_idx]
-
-
         del mdpnet_dml_crossfit_k
+        del V
+        del Q
+
+        ##
+
+        # learning rate setting
+        best_train_loss = 100
+        lr = config.lr
+
+        #model prepare
+        mdpnet_dml_repbm_crossfit_k = MDPnet(config)
+
+        #learn model
+        for i_episode in range(100):  # range(len(memory_k_two)):  # len(cross_idx)
+            train_loss = 0
+            dev_loss = 0
+            optimizer_one = optim.Adam(mdpnet_dml_repbm_crossfit_k.parameters(), lr=lr, weight_decay=config.weight_decay)
+            for i_batch in range(config.train_num_batches):
+                train_loss_batch = mdpmodel_train(rep_fold_memory, mdpnet_dml_repbm_crossfit_k, optimizer_one, 1, config)
+                train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+                dev_loss_batch = mdpmodel_test(rep_dev_memory, mdpnet_dml_repbm_crossfit_k, 1, config)
+                dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+
+            if (i_episode + 1) % config.print_per_epi == 0:
+                print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss,
+                                                                                   dev_loss))
+
+            if train_loss < best_train_loss:
+                best_train_loss = train_loss
+            else:
+                lr *= config.lr_decay
+
+        mdpnet_dml_repbm_crossfit_k.eval()
+
+        # calculate V,Q for fold = k(RepBM DML)
+        V, Q = compute_values_dml(traj_set, mdpnet_dml_repbm_crossfit_k, tc, eval_qnet, config,
+                                  max_length=config.max_length,
+                                  model_type='MDP')
+
+        # doubly robust estimate for fold = k
+        dml_dr_cross_k_nd_repbm_fold = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+        dml_dr_cross_k_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_nd_repbm_fold[fold_indicator == fold_idx]
+
+        # doubly robust with estimated ps for fold = k
+        dml_dr_cross_k_estpz_nd_repbm_fold = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
+        dml_dr_cross_k_estpz_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_estpz_nd_repbm_fold[fold_indicator == fold_idx]
+
+
+        del mdpnet_dml_repbm_crossfit_k
+        del V
+        del Q
     # -----------------
 
 
@@ -1451,7 +1517,6 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     sdr_msepi_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
     swdr_msepi_estpz = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
 
-    # mdpnet = qvalue の算出に使われるモデル
     # RepBM with representation
     V,Q = compute_values(traj_set, mdpnet, tc, eval_qnet, config, max_length = config.max_length, model_type='MDP')
     dr = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
@@ -1536,7 +1601,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     #       '| Eval MDP: {:.3f}s | Eval DR: {:.3f}s | Eval: {:.3f}s |'
     #       .format(time_sampling, time_premrdr, time_mrdr, time_mdp, time_tc, time_eval, time_dr, time_gt))
     print('Target policy value:', np.mean(target))
-    results = [mv, dr,
+    results = [mv, dr, dml_dr_cross_k_nd_repbm, dml_dr_cross_k_estpz_nd_repbm,
                dml_dr_cross_k_nd, dml_dr_cross_k_estpz_nd, dml_dr_cross_k_estpz_wis_nd, dml_dr_cross_k_estpz_sis_nd,dml_dr_cross_k_estpz_swis_nd, dml_dr_cross_k_chunk_nd,
                wdr, sdr, swdr, mv_bsl, dr_bsl, dr_bsl_estpz, wdr_bsl_estpz, wdr_bsl, sdr_bsl, swdr_bsl,
                mv_msepi, dr_msepi, wdr_msepi, sdr_msepi, swdr_msepi,

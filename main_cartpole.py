@@ -46,7 +46,7 @@ if __name__ == "__main__":
     load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar') # target policy
     eval_qnet.eval() # 読み込んだモデルのモードを切り替える
 
-    methods = ['Model', 'DR',
+    methods = ['Model', 'DR', 'DML_RepBM', 'DML_RepBM_estpz',
                'DML-DR-CROSS-K-ND', 'dml_dr_cross_k_estpz_nd', 'dml_dr_cross_k_estpz_wis_nd', 'dml_dr_cross_k_estpz_sis_nd', 'dml_dr_cross_k_estpz_swis_nd','dml_dr_cross_k_chunk_nd',
                'WDR', 'Soft DR', 'Soft WDR',
                'Model Bsl', 'DR Bsl', 'DR EstPz Bsl', 'WDR EstPz Bsl','WDR Bsl', 'Soft DR Bsl', 'Soft WDR Bsl',
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     mse_sd = mse.std(0)
     mse_ind_sd = mse_ind.std(0)
 
-
+    mse_result = []
     mse_table = np.zeros((num_method,4))
     print('Average result over {} runs:'.format(config.N))
     for i in range(num_method):
@@ -94,6 +94,11 @@ if __name__ == "__main__":
         mse_table[i, 1] = np.sqrt(mse_sd[i])
         mse_table[i, 2] = np.sqrt(mse_ind_mean[i])
         mse_table[i, 3] = np.sqrt(mse_ind_sd[i])
+
+        out = {"method": methods[i], "rmse_mean":np.sqrt(mse_mean[i]), "rmse_sd":np.sqrt(mse_sd[i]), "rmse_ind_mean":np.sqrt(mse_ind_mean[i]), "rmse_ind_sd":np.sqrt(mse_ind_sd[i]) }
+        mse_result.append(out)
+    result_df = pd.DataFrame(mse_result)
+    result_df.to_csv("result_df.csv")
     np.savetxt('results/result_cartpole.txt', mse_table, fmt='%.3e', delimiter=',')
 
 
