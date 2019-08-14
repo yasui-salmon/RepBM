@@ -3,6 +3,7 @@
 import numpy as np
 import torch
 import gym
+import pandas as pd
 from src.models import QNet
 from src.config import cartpole_config
 from src.train_pipeline import train_pipeline
