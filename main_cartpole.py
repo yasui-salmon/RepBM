@@ -25,12 +25,12 @@ Tensor = FloatTensor
 
 
 
-def parallel_train_pipeline(config, methods, env, eval_qnet, max_name_length):
+def parallel_train_pipeline(config, methods, env, eval_qnet, seedvec, max_name_length):
     num_method = len(methods)
     mse = np.zeros(len(methods))
     ind_mse = np.zeros(len(methods))
 
-    results, target = train_pipeline(env, config, eval_qnet)
+    results, target = train_pipeline(env, config, eval_qnet, seedvec)
 
     for i_method in range(num_method):
         mse_1, mse_2 = error_info(results[i_method], target, methods[i_method].ljust(max_name_length))
@@ -69,12 +69,12 @@ if __name__ == "__main__":
     #            'MRDR Q', 'MRDR', 'WMRDR', 'Soft MRDR', 'Soft WMRDR',
     #            'MRDR-w Q', 'MRDR-w', 'WMRDR-w', 'Soft MRDR-w', 'Soft WMRDR-w',
     #            'IS', 'WIS', 'Soft IS', 'Soft WIS', 'PDIS', 'WPDIS', 'Soft PDIS', 'Soft WPDIS']
-
-
+    np.random.seed(seed=100)
+    seedvec = np.random.randint(0, config.MAX_SEED, config.sample_num_traj_eval)
 
     num_method = len(methods)
     max_name_length = len(max(methods,key=len))
-    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, max_name_length) for i in range(config.N)])
+    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, seedvec, max_name_length) for i in range(config.N)])
     mse = np.vstack(x[0] for x in result_parallel)
     mse_ind = np.vstack(x[1] for x in result_parallel)
 
