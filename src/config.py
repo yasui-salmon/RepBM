@@ -22,10 +22,10 @@ class cartpole_config():
 
     # model parameters
     fold_num = 4
-    sample_num_traj_eval = 1024
-    sample_num_traj = 1024 #1024
-    train_num_traj = 768 #768
-    dev_num_traj = 256 #124
+    sample_num_traj_eval = 2048
+    sample_num_traj = 2048 #1024
+    train_num_traj = 1536 #768
+    dev_num_traj = 512 #124
     transition_input_dims = 4
     rep_hidden_dims = [16] # The last dim is the representation dim
     transition_hidden_dims = []

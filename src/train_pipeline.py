@@ -1364,6 +1364,9 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
     dml_dr_cross_k_nd_repbm = np.zeros(config.sample_num_traj)
     dml_dr_cross_k_estpz_nd_repbm = np.zeros(config.sample_num_traj)
+    dml_dr_cross_k_repbm_estpz_wis_nd = np.zeros(config.sample_num_traj)
+    dml_dr_cross_k_repbm_estpz_sis_nd = np.zeros(config.sample_num_traj)
+    dml_dr_cross_k_repbm_estpz_swis_nd = np.zeros(config.sample_num_traj)
 
     fold_indicator = np.trunc(np.arange(config.sample_num_traj) / fold_sample_num)
     for fold_idx in range(fold_num):
@@ -1498,6 +1501,17 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
         dml_dr_cross_k_estpz_nd_repbm_fold = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
         dml_dr_cross_k_estpz_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_estpz_nd_repbm_fold[fold_indicator == fold_idx]
 
+        # doubly robust with self normalized estimated ps for fold = k
+        dml_dr_cross_estpz_k_repbm_fold_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+        dml_dr_cross_k_repbm_estpz_wis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_wis[fold_indicator == fold_idx]
+
+        # doubly robust with self normalized estimated ps for fold = k
+        dml_dr_cross_estpz_k_repbm_fold_sis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
+        dml_dr_cross_k_repbm_estpz_sis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_sis[fold_indicator == fold_idx]
+
+        # doubly robust with self normalized estimated ps for fold = k
+        dml_dr_cross_estpz_k_repbm_fold_swis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
+        dml_dr_cross_k_repbm_estpz_swis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_swis[fold_indicator == fold_idx]
 
         del mdpnet_dml_repbm_crossfit_k
         del V
@@ -1601,7 +1615,7 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
     #       '| Eval MDP: {:.3f}s | Eval DR: {:.3f}s | Eval: {:.3f}s |'
     #       .format(time_sampling, time_premrdr, time_mrdr, time_mdp, time_tc, time_eval, time_dr, time_gt))
     print('Target policy value:', np.mean(target))
-    results = [mv, dr, dml_dr_cross_k_nd_repbm, dml_dr_cross_k_estpz_nd_repbm,
+    results = [mv, dr, dml_dr_cross_k_nd_repbm, dml_dr_cross_k_estpz_nd_repbm, dml_dr_cross_k_repbm_estpz_wis_nd, dml_dr_cross_k_repbm_estpz_sis_nd, dml_dr_cross_k_repbm_estpz_swis_nd,
                dml_dr_cross_k_nd, dml_dr_cross_k_estpz_nd, dml_dr_cross_k_estpz_wis_nd, dml_dr_cross_k_estpz_sis_nd,dml_dr_cross_k_estpz_swis_nd, dml_dr_cross_k_chunk_nd,
                wdr, sdr, swdr, mv_bsl, dr_bsl, dr_bsl_estpz, wdr_bsl_estpz, wdr_bsl, sdr_bsl, swdr_bsl,
                mv_msepi, dr_msepi, wdr_msepi, sdr_msepi, swdr_msepi,
@@ -1609,6 +1623,9 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
                dr_msepi_estpz, wdr_msepi_estpz, sdr_msepi_estpz, swdr_msepi_estpz,
                mrdr_qv, mrdr, wmrdr, smrdr, swmrdr, mrdrv2_qv, mrdrv2, wmrdrv2, smrdrv2, swmrdrv2,
                ips, wis, sis, swis, pdis, wpdis, spdis, swpdis]
+
+
+
 
     # results = [mv, dr,
     #            dml_dr_cross_k, dml_dr_cross_k_estpz, dml_dr_cross_k_estpz_wis,
