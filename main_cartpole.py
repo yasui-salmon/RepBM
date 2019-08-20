@@ -100,7 +100,7 @@ if __name__ == "__main__":
         mse_result.append(out)
     result_df = pd.DataFrame(mse_result)
     result_df.to_csv("result_df.csv")
-    np.savetxt('results/result_cartpole.txt', mse_table, fmt='%.3e', delimiter=',')
+    np.savetxt('result_cartpole.txt', mse_table, fmt='%.3e', delimiter=',')
 
 
 
