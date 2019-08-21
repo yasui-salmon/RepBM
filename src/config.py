@@ -155,7 +155,10 @@ class mountaincar_config():
     target_update = 10
 
     # model parameters
+    fold_num = 4
+
     sample_num_traj = 1024
+    sample_num_traj_eval = sample_num_traj
     train_num_traj = 900
     dev_num_traj = 124
     transition_input_dims = 4
@@ -181,6 +184,11 @@ class mountaincar_config():
     alpha_rep = 0.1
     weight_decay = 0.00005
 
+    # policy net parameter
+    policy_train_num_episodes = 100 #100 or 1024
+    policy_train_num_batches = 100 #100
+    policy_lr = 0.05
+
     # MRDR parameter
     soften_epsilon = 0.02
     mrdr_lr = 0.01
@@ -192,7 +200,7 @@ class mountaincar_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 100
+    N = 4
     MAX_SEED = 1000000
 
 
@@ -244,6 +252,7 @@ class mountaincar_test_config():
     lr_decay = 0.9
     alpha_rep = 0.1
     weight_decay = 0.00005
+    policy_lr = 0.05
 
     # MRDR parameter
     soften_epsilon = 0.02
