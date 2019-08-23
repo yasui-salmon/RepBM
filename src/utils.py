@@ -206,11 +206,12 @@ def error_info(estm, target, method_name):
 
     mse_a = (np.mean(estm) - np.mean(target)) ** 2
     mse_b = np.mean((estm - target) ** 2)
+    mse_w = ( (np.mean(estm) - np.mean(target))/np.mean(target) ) ** 2
 
     print('{}: Mean value is {:.3f}±{:.3e}, mse of mean is {:.3e}, mse of individual is {:.3e}'
           .format(method_name, np.mean(estm), np.std(estm),
                   mse_a, mse_b))
-    return mse_a, mse_b
+    return mse_a, mse_b, mse_w
 
 def error_info_step(estm, target, step):
     estm_step = estm[:step]

@@ -4,7 +4,7 @@ class cartpole_config():
     action_size = 2
     gamma = 1.0
     n_win_ticks = 195
-    max_length = 200
+    max_length = 200 #shorter than MRDR experiment
     oracle_reward = 1
     rescale = [[1, 1, 1, 1]]
 
@@ -22,16 +22,16 @@ class cartpole_config():
 
     # model parameters
     fold_num = 4
-    sample_num_traj_eval = 2048
-    sample_num_traj = 2048 #1024
-    train_num_traj = 1536 #768
-    dev_num_traj = 512 #124
+    sample_num_traj_eval = 1024
+    sample_num_traj = 1024 #1024
+    train_num_traj = 768 #768
+    dev_num_traj = 256 #124
     transition_input_dims = 4
     rep_hidden_dims = [16] # The last dim is the representation dim
     transition_hidden_dims = []
     reward_hidden_dims = []
     terminal_hidden_dims = [32,32]
-    behavior_epsilon = 0.1#0.2
+    behavior_epsilon = 0.2#0.2
     eval_epsilon = 0.0
 
     # model training parameter
@@ -65,7 +65,7 @@ class cartpole_config():
     mrdr_hidden_dims = [32]
 
     eval_num_rollout = 1
-    N = 100 #should be 100
+    N = 4 #should be 100
     MAX_SEED = 1000000
 
 
@@ -200,7 +200,7 @@ class mountaincar_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 4
+    N = 100
     MAX_SEED = 1000000
 
 
