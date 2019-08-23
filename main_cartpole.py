@@ -81,9 +81,6 @@ if __name__ == "__main__":
     mse_ind = np.vstack(x[1] for x in result_parallel)
     mse_w = np.vstack(x[2] for x in result_parallel)
 
-    mse_df = pd.DataFrame({"mse": mse.squeeze(), "mse_ind": mse_ind.squeeze(), "mse_w": mse_w.squeeze()})
-
-
     mse_mean = mse.mean(0)
     mse_ind_mean = mse_ind.mean(0)
     mse_w_mean = mse_w.mean(0)
@@ -108,7 +105,13 @@ if __name__ == "__main__":
         mse_result.append(out)
     result_df = pd.DataFrame(mse_result)
     result_df.to_csv("result_df.csv")
+
+    mse = [x[0] for x in result_parallel]
+    mse_ind = [x[1] for x in result_parallel]
+    mse_w = [x[2] for x in result_parallel]
+    mse_df = pd.DataFrame({"mse": mse, "mse_ind": mse_ind, "mse_w": mse_w})
     mse_df.to_csv("mse_df.csv")
+
     np.savetxt('result_cartpole.txt', mse_table, fmt='%.3e', delimiter=',')
 
 
