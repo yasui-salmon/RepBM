@@ -25,13 +25,13 @@ Tensor = FloatTensor
 
 
 
-def parallel_train_pipeline(config, methods, env, eval_qnet, seedvec, max_name_length):
+def parallel_train_pipeline(config, methods, env, eval_qnet, bhv_qnet, seedvec, max_name_length):
     num_method = len(methods)
     mse = np.zeros(len(methods))
     ind_mse = np.zeros(len(methods))
     mse_w = np.zeros(len(methods))
 
-    results, target = train_pipeline(env, config, eval_qnet, seedvec)
+    results, target = train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec)
 
     for i_method in range(num_method):
         mse_1, mse_2, mse_3 = error_info(results[i_method], target, methods[i_method].ljust(max_name_length))
@@ -48,6 +48,10 @@ if __name__ == "__main__":
     eval_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
     load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar') # target policy
     eval_qnet.eval() # 読み込んだモデルのモードを切り替える
+
+    bhv_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
+    load_qnet(bhv_qnet, filename='qnet.pth.tar') # target policy
+    bhv_qnet.eval() # 読み込んだモデルのモードを切り替える
 
     methods = ['Model', 'DR', 'DML_RepBM', 'DML_RepBM_estpz', 'DML_RepBM_estpz_wis','DML_RepBM_estpz_sis',  'DML_RepBM_estpz_swis',
                'DML-DR-CROSS-K-ND', 'dml_dr_cross_k_estpz_nd', 'dml_dr_cross_k_estpz_wis_nd', 'dml_dr_cross_k_estpz_sis_nd', 'dml_dr_cross_k_estpz_swis_nd','dml_dr_cross_k_chunk_nd',
@@ -76,7 +80,7 @@ if __name__ == "__main__":
 
     num_method = len(methods)
     max_name_length = len(max(methods,key=len))
-    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, seedvec, max_name_length) for i in range(config.N)])
+    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, bhv_qnet, seedvec, max_name_length) for i in range(config.N)])
     mse = np.vstack(x[0] for x in result_parallel)
     mse_ind = np.vstack(x[1] for x in result_parallel)
     mse_w = np.vstack(x[2] for x in result_parallel)

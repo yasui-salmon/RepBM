@@ -79,15 +79,18 @@ if __name__ == "__main__":
 
     num_method = len(methods)
     max_name_length = len(max(methods,key=len))
-    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, seedvec, max_name_length) for i in range(config.N)])
+    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, bhv_qnet, seedvec, max_name_length) for i in range(config.N)])
     mse = np.vstack(x[0] for x in result_parallel)
     mse_ind = np.vstack(x[1] for x in result_parallel)
+    mse_w = np.vstack(x[2] for x in result_parallel)
 
     mse_mean = mse.mean(0)
     mse_ind_mean = mse_ind.mean(0)
+    mse_w_mean = mse_w.mean(0)
 
     mse_sd = mse.std(0)
     mse_ind_sd = mse_ind.std(0)
+    mse_w_sd = mse_w.std(0)
 
     mse_result = []
     mse_table = np.zeros((num_method,4))
@@ -101,11 +104,50 @@ if __name__ == "__main__":
         mse_table[i, 2] = np.sqrt(mse_ind_mean[i])
         mse_table[i, 3] = np.sqrt(mse_ind_sd[i])
 
-        out = {"method": methods[i], "rmse_mean":np.sqrt(mse_mean[i]), "rmse_sd":np.sqrt(mse_sd[i]), "rmse_ind_mean":np.sqrt(mse_ind_mean[i]), "rmse_ind_sd":np.sqrt(mse_ind_sd[i]) }
+        out = {"method": methods[i], "rmse_mean":np.sqrt(mse_mean[i]), "rmse_sd":np.sqrt(mse_sd[i]), "rmse_ind_mean":np.sqrt(mse_ind_mean[i]), "rmse_ind_sd":np.sqrt(mse_ind_sd[i]) ,"rmse_w_mean":np.sqrt(mse_w_mean[i]), "rmse_w_sd":np.sqrt(mse_w_sd[i]) }
         mse_result.append(out)
     result_df = pd.DataFrame(mse_result)
-    result_df.to_csv("result_df.csv")
-    np.savetxt('result_cartpole.txt', mse_table, fmt='%.3e', delimiter=',')
+    result_df.to_csv("mm_result_df.csv")
+
+    mse = [x[0] for x in result_parallel]
+    mse_ind = [x[1] for x in result_parallel]
+    mse_w = [x[2] for x in result_parallel]
+    mse_df = pd.DataFrame({"mse": mse, "mse_ind": mse_ind, "mse_w": mse_w})
+    mse_df.to_csv("mm_mse_df.csv")
+    #
+    #
+    # np.random.seed(seed=100)
+    # seedvec = np.random.randint(0, config.MAX_SEED, config.sample_num_traj_eval)
+    #
+    # num_method = len(methods)
+    # max_name_length = len(max(methods,key=len))
+    # result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, seedvec, max_name_length) for i in range(config.N)])
+    # mse = np.vstack(x[0] for x in result_parallel)
+    # mse_ind = np.vstack(x[1] for x in result_parallel)
+    #
+    # mse_mean = mse.mean(0)
+    # mse_ind_mean = mse_ind.mean(0)
+    #
+    # mse_sd = mse.std(0)
+    # mse_ind_sd = mse_ind.std(0)
+    #
+    # mse_result = []
+    # mse_table = np.zeros((num_method,4))
+    # print('Average result over {} runs:'.format(config.N))
+    # for i in range(num_method):
+    #     print('{}: Root mse of mean is {:.3e}±{:.2e}, root mse of individual is {:.3e}±{:.2e}'
+    #           .format(methods[i].ljust(max_name_length), np.sqrt(mse_mean[i]), np.sqrt(mse_mean[i]),
+    #                   np.sqrt(mse_ind_mean[i]), np.sqrt(mse_ind_sd[i])))
+    #     mse_table[i, 0] = np.sqrt(mse_mean[i])
+    #     mse_table[i, 1] = np.sqrt(mse_sd[i])
+    #     mse_table[i, 2] = np.sqrt(mse_ind_mean[i])
+    #     mse_table[i, 3] = np.sqrt(mse_ind_sd[i])
+    #
+    #     out = {"method": methods[i], "rmse_mean":np.sqrt(mse_mean[i]), "rmse_sd":np.sqrt(mse_sd[i]), "rmse_ind_mean":np.sqrt(mse_ind_mean[i]), "rmse_ind_sd":np.sqrt(mse_ind_sd[i]) }
+    #     mse_result.append(out)
+    # result_df = pd.DataFrame(mse_result)
+    # result_df.to_csv("result_df.csv")
+    # np.savetxt('result_cartpole.txt', mse_table, fmt='%.3e', delimiter=',')
 
 
 

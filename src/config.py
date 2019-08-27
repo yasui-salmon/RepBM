@@ -11,7 +11,7 @@ class cartpole_config():
     # q training parameters
     dqn_batch_size = 64
     dqn_hidden_dims = [24,48]
-    dqn_num_episodes = 2000
+    dqn_num_episodes = 200
     buffer_capacity = 10000
     dqn_alpha = 0.01
     dqn_alpha_decay = 0.01
@@ -65,7 +65,7 @@ class cartpole_config():
     mrdr_hidden_dims = [32]
 
     eval_num_rollout = 1
-    N = 4 #should be 100
+    N = 16 #should be 100
     MAX_SEED = 1000000
 
 

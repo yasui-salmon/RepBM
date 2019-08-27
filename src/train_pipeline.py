@@ -984,7 +984,7 @@ def mrdr_preprocess(traj_set, config):
     return transitions
 
 
-def train_pipeline(env, config, eval_qnet, seedvec = None):
+def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
     memory = SampleSet(config) # same the tuples for model training
     dev_memory = SampleSet(config)
     pz_memory = SampleSet(config)
@@ -1033,16 +1033,16 @@ def train_pipeline(env, config, eval_qnet, seedvec = None):
 
         while not done:
             # Select and perform an action
-            q_values = eval_qnet.forward(state.type(Tensor)).detach() # Q値の予測 detachは勾配が伝わらないようにする処理
+            q_values = bhv_qnet.forward(state.type(Tensor)).detach() # Q値の予測 detachは勾配が伝わらないようにする処理
             # ここのactionはbehavior policyによるもの？
             # q-valuesはNULLじゃないからqnetは使われない
             # actionは結局trajectoryとして保存されるのでbehaviorっぽい
-            action = epsilon_greedy_action(state, eval_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyでactionを決定する(behavior)
-            p_pib = epsilon_greedy_action_prob(state, eval_qnet, config.behavior_epsilon,
+            action = epsilon_greedy_action(state, bhv_qnet, config.behavior_epsilon, config.action_size, q_values) # epsilon greedyでactionを決定する(behavior)
+            p_pib = epsilon_greedy_action_prob(state, bhv_qnet, config.behavior_epsilon,
                                                config.action_size, q_values) # epsilon greedy (behavior policy) return list of probability
-            soft_pie = epsilon_greedy_action_prob(state, eval_qnet, config.soften_epsilon,
+            soft_pie = epsilon_greedy_action_prob(state, bhv_qnet, config.soften_epsilon,
                                                config.action_size, q_values) # soften_epsilonを使った時の epsilon greedyの各腕の選択確率を返す
-            p_pie = epsilon_greedy_action_prob(state, eval_qnet, 0, config.action_size, q_values) # argmax(evaluation policy)
+            p_pie = epsilon_greedy_action_prob(state, bhv_qnet, 0, config.action_size, q_values) # argmax(evaluation policy)
 
 
             isweight = p_pie[:, action.item()] / p_pib[:,action.item()] # importance weightの算出 max選択肢以外は０
