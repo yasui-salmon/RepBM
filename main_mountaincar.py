@@ -29,19 +29,21 @@ Tensor = FloatTensor
 
 
 
-def parallel_train_pipeline(config, methods, env, eval_qnet, seedvec, max_name_length):
+def parallel_train_pipeline(config, methods, env, eval_qnet, bhv_qnet, seedvec, max_name_length):
     num_method = len(methods)
     mse = np.zeros(len(methods))
     ind_mse = np.zeros(len(methods))
+    mse_w = np.zeros(len(methods))
 
-    results, target = train_pipeline(env, config, eval_qnet, seedvec)
+    results, target = train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec)
 
     for i_method in range(num_method):
-        mse_1, mse_2 = error_info(results[i_method], target, methods[i_method].ljust(max_name_length))
+        mse_1, mse_2, mse_3 = error_info(results[i_method], target, methods[i_method].ljust(max_name_length))
         mse[i_method] = mse_1
         ind_mse[i_method] = mse_2
+        mse_w[i_method] = mse_3
 
-    return(mse, ind_mse)
+    return(mse, ind_mse, mse_w)
 
 
 if __name__ == "__main__":

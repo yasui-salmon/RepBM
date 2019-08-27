@@ -200,7 +200,7 @@ class mountaincar_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 100
+    N = 200
     MAX_SEED = 1000000
 
 
