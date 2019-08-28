@@ -65,8 +65,9 @@ class cartpole_config():
     mrdr_hidden_dims = [32]
 
     eval_num_rollout = 1
-    N = 16 #should be 100
+    N = 100 #should be 100
     MAX_SEED = 1000000
+
 
 
 class cartpole_test_config():
@@ -306,3 +307,7 @@ class hiv_config():
     behavior_eps = 0.05
     standardize_rewards = True
     ins = 20
+
+
+class gpu_config():
+    gpu_false_enforce = False # if false try to use gpu

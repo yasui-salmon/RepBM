@@ -5,8 +5,12 @@ import torch
 from torch.autograd import Variable
 
 # if gpu is to be used
-#use_cuda = torch.cuda.is_available()
-use_cuda = False
+from src.config import gpu_config
+# if gpu is to be used
+if gpu_config.gpu_false_enforce == True:
+    use_cuda = False
+else:
+    use_cuda = torch.cuda.is_available()
 
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor

@@ -17,9 +17,12 @@ from joblib import Parallel, delayed
 # ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor
 # Tensor = FloatTensor
 
+from src.config import gpu_config
 # if gpu is to be used
-#use_cuda = torch.cuda.is_available()
-use_cuda = False
+if gpu_config.gpu_false_enforce == True:
+    use_cuda = False
+else:
+    use_cuda = torch.cuda.is_available()
 print(use_cuda)
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
