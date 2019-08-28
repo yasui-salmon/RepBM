@@ -11,7 +11,7 @@ class cartpole_config():
     # q training parameters
     dqn_batch_size = 64
     dqn_hidden_dims = [24,48]
-    dqn_num_episodes = 200
+    dqn_num_episodes = 100 #2000
     buffer_capacity = 10000
     dqn_alpha = 0.01
     dqn_alpha_decay = 0.01
