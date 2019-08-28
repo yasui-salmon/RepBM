@@ -12,6 +12,7 @@ if gpu_config.gpu_false_enforce == True:
 else:
     use_cuda = torch.cuda.is_available()
 
+print(use_cuda)
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor

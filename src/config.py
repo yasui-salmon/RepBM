@@ -310,4 +310,4 @@ class hiv_config():
 
 
 class gpu_config():
-    gpu_false_enforce = False # if false try to use gpu
+    gpu_false_enforce = True # if false try to use gpu
