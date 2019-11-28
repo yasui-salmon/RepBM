@@ -337,10 +337,10 @@ class acrobot_config():
     # model parameters
     fold_num = 4
 
-    sample_num_traj = 1024
+    sample_num_traj = 300#1024
     sample_num_traj_eval = sample_num_traj
-    train_num_traj = 900
-    dev_num_traj = 124
+    train_num_traj = 200#900
+    dev_num_traj = 100#124
     transition_input_dims = 4
     rep_hidden_dims = [16] # The last dim is the representation dim
     transition_hidden_dims = []
@@ -349,15 +349,16 @@ class acrobot_config():
     behavior_epsilon = 0.2
     eval_epsilon = 0.0
 
+
     # model training parameter
-    print_per_epi = 10
+    print_per_epi = 50
     train_num_episodes = 100
-    train_num_batches = 50
-    train_batch_size = 16
+    train_num_batches = 100
+    train_batch_size = 64
     test_batch_size = 16
     tc_num_episode = 100
-    tc_num_batches = 50
-    tc_batch_size = 16
+    tc_num_batches = 100
+    tc_batch_size = 64
     tc_test_batch_size = 16
     lr = 0.01
     lr_decay = 0.9

@@ -253,18 +253,13 @@ def mdpmodel_test(memory, mdpnet, loss_mode, config):
     # Compute loss
     loss_mode = 0
     if loss_mode == 0:
-        loss = torch.nn.MSELoss()(predict_state_diff, states_diff) \
-               + torch.nn.MSELoss()(predict_reward_value, reward)
+        loss = torch.nn.MSELoss()(predict_state_diff, states_diff) + torch.nn.MSELoss()(predict_reward_value, reward)
     elif loss_mode == 1:
-        loss = weighted_mse_loss(predict_state_diff, states_diff, weights) \
-               + weighted_mse_loss(predict_reward_value, reward, weights) \
-               + config.alpha_rep*loss_rep
+        loss = weighted_mse_loss(predict_state_diff, states_diff, weights) + weighted_mse_loss(predict_reward_value, reward, weights) + config.alpha_rep*loss_rep
     elif loss_mode == 2:
-        loss = weighted_mse_loss(predict_state_diff, states_diff, weights_2) \
-               + weighted_mse_loss(predict_reward_value, reward, weights_2)
+        loss = weighted_mse_loss(predict_state_diff, states_diff, weights_2) + weighted_mse_loss(predict_reward_value, reward, weights_2)
 
     return loss.item()
-
 
 def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     mdpnet.train()
@@ -1046,6 +1041,7 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
             soft_pie = epsilon_greedy_action_prob(state, bhv_qnet, config.soften_epsilon,
                                                config.action_size, q_values) # soften_epsilonを使った時の epsilon greedyの各腕の選択確率を返す
             p_pie = epsilon_greedy_action_prob(state, bhv_qnet, 0, config.action_size, q_values) # argmax(evaluation policy)
+            print
 
 
             isweight = p_pie[:, action.item()] / p_pib[:,action.item()] # importance weightの算出 max選択肢以外は０
@@ -1208,6 +1204,7 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
         for i_batch in range(config.train_num_batches):
             train_loss_batch = mdpmodel_train(memory, mdpnet_msepi, optimizer, 2, config)
             dev_loss_batch = mdpmodel_test(dev_memory, mdpnet_msepi, 2, config)
+
             train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
             dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
         if (i_episode + 1) % config.print_per_epi == 0:
