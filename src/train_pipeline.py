@@ -1235,11 +1235,9 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
             print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'
                   .format(i_episode + 1, train_loss, dev_loss))
 
-        print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss, dev_loss))
-
         dev_loss_vec[i_episode] = dev_loss
 
-        if (i_episode > 10) & (dev_loss_vec[i_episode - 10] < dev_loss):
+        if (i_episode > 20) & (dev_loss_vec[i_episode - 20] < dev_loss):
             best_train_loss = train_loss
             break
         else:
@@ -1413,8 +1411,8 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
                 print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss,
                                                                                    dev_loss))
 
-            if train_loss < best_train_loss:
-                best_train_loss = train_loss
+            if dev_loss < best_train_loss: #if train_loss < best_train_loss:
+                best_train_loss = dev_loss #best_train_loss = train_loss
             else:
                 lr *= config.lr_decay
 
@@ -1459,63 +1457,63 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
 
         ##
 
-        # learning rate setting
-        best_train_loss = 100
-        lr = config.lr
-
-        #model prepare
-        mdpnet_dml_repbm_crossfit_k = MDPnet(config)
-
-        #learn model
-        for i_episode in range(100):  # range(len(memory_k_two)):  # len(cross_idx)
-            train_loss = 0
-            dev_loss = 0
-            optimizer_one = optim.Adam(mdpnet_dml_repbm_crossfit_k.parameters(), lr=lr, weight_decay=config.weight_decay)
-            for i_batch in range(config.train_num_batches):
-                train_loss_batch = mdpmodel_train(rep_fold_memory, mdpnet_dml_repbm_crossfit_k, optimizer_one, 1, config)
-                train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
-                dev_loss_batch = mdpmodel_test(rep_dev_memory, mdpnet_dml_repbm_crossfit_k, 1, config)
-                dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
-
-            if (i_episode + 1) % config.print_per_epi == 0:
-                print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss,
-                                                                                   dev_loss))
-
-            if train_loss < best_train_loss:
-                best_train_loss = train_loss
-            else:
-                lr *= config.lr_decay
-
-        mdpnet_dml_repbm_crossfit_k.eval()
-
-        # calculate V,Q for fold = k(RepBM DML)
-        V, Q = compute_values_dml(traj_set, mdpnet_dml_repbm_crossfit_k, tc, eval_qnet, config,
-                                  max_length=config.max_length,
-                                  model_type='MDP')
-
-        # doubly robust estimate for fold = k
-        dml_dr_cross_k_nd_repbm_fold = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
-        dml_dr_cross_k_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_nd_repbm_fold[fold_indicator == fold_idx]
-
-        # doubly robust with estimated ps for fold = k
-        dml_dr_cross_k_estpz_nd_repbm_fold = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
-        dml_dr_cross_k_estpz_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_estpz_nd_repbm_fold[fold_indicator == fold_idx]
-
-        # doubly robust with self normalized estimated ps for fold = k
-        dml_dr_cross_estpz_k_repbm_fold_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
-        dml_dr_cross_k_repbm_estpz_wis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_wis[fold_indicator == fold_idx]
-
-        # doubly robust with self normalized estimated ps for fold = k
-        dml_dr_cross_estpz_k_repbm_fold_sis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
-        dml_dr_cross_k_repbm_estpz_sis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_sis[fold_indicator == fold_idx]
-
-        # doubly robust with self normalized estimated ps for fold = k
-        dml_dr_cross_estpz_k_repbm_fold_swis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
-        dml_dr_cross_k_repbm_estpz_swis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_swis[fold_indicator == fold_idx]
-
-        del mdpnet_dml_repbm_crossfit_k
-        del V
-        del Q
+        # # learning rate setting
+        # best_train_loss = 100
+        # lr = config.lr
+        #
+        # #model prepare
+        # mdpnet_dml_repbm_crossfit_k = MDPnet(config)
+        #
+        # #learn model
+        # for i_episode in range(100):  # range(len(memory_k_two)):  # len(cross_idx)
+        #     train_loss = 0
+        #     dev_loss = 0
+        #     optimizer_one = optim.Adam(mdpnet_dml_repbm_crossfit_k.parameters(), lr=lr, weight_decay=config.weight_decay)
+        #     for i_batch in range(config.train_num_batches):
+        #         train_loss_batch = mdpmodel_train(rep_fold_memory, mdpnet_dml_repbm_crossfit_k, optimizer_one, 1, config)
+        #         train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
+        #         dev_loss_batch = mdpmodel_test(rep_dev_memory, mdpnet_dml_repbm_crossfit_k, 1, config)
+        #         dev_loss = (dev_loss * i_batch + dev_loss_batch) / (i_batch + 1)
+        #
+        #     if (i_episode + 1) % config.print_per_epi == 0:
+        #         print('Episode {:0>3d}: train loss {:.3e}, dev loss {:.3e}'.format(i_episode + 1, train_loss,
+        #                                                                            dev_loss))
+        #
+        #     if train_loss < best_train_loss:
+        #         best_train_loss = train_loss
+        #     else:
+        #         lr *= config.lr_decay
+        #
+        # mdpnet_dml_repbm_crossfit_k.eval()
+        #
+        # # calculate V,Q for fold = k(RepBM DML)
+        # V, Q = compute_values_dml(traj_set, mdpnet_dml_repbm_crossfit_k, tc, eval_qnet, config,
+        #                           max_length=config.max_length,
+        #                           model_type='MDP')
+        #
+        # # doubly robust estimate for fold = k
+        # dml_dr_cross_k_nd_repbm_fold = doubly_robust(traj_set, V, Q, config, wis=False, soften=False)
+        # dml_dr_cross_k_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_nd_repbm_fold[fold_indicator == fold_idx]
+        #
+        # # doubly robust with estimated ps for fold = k
+        # dml_dr_cross_k_estpz_nd_repbm_fold = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=False)
+        # dml_dr_cross_k_estpz_nd_repbm[fold_indicator == fold_idx] = dml_dr_cross_k_estpz_nd_repbm_fold[fold_indicator == fold_idx]
+        #
+        # # doubly robust with self normalized estimated ps for fold = k
+        # dml_dr_cross_estpz_k_repbm_fold_wis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=False)
+        # dml_dr_cross_k_repbm_estpz_wis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_wis[fold_indicator == fold_idx]
+        #
+        # # doubly robust with self normalized estimated ps for fold = k
+        # dml_dr_cross_estpz_k_repbm_fold_sis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=False, soften=True)
+        # dml_dr_cross_k_repbm_estpz_sis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_sis[fold_indicator == fold_idx]
+        #
+        # # doubly robust with self normalized estimated ps for fold = k
+        # dml_dr_cross_estpz_k_repbm_fold_swis = dml_doubly_robust(traj_set, V, Q, pz, config, wis=True, soften=True)
+        # dml_dr_cross_k_repbm_estpz_swis_nd[fold_indicator == fold_idx] = dml_dr_cross_estpz_k_repbm_fold_swis[fold_indicator == fold_idx]
+        #
+        # del mdpnet_dml_repbm_crossfit_k
+        # del V
+        # del Q
     # -----------------
 
 

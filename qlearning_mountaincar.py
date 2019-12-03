@@ -105,7 +105,7 @@ if __name__ == "__main__":
         #     target_net.load_state_dict(qnet.state_dict())
         while not done:
             # Select and perform an action
-            action = select_action(state,qnet,epsilon=epsilon,action_size=config.action_size)
+            action = select_action(state, qnet, epsilon=epsilon, action_size=config.action_size)
             if i_episode <= 500 or random.random()<2*epsilon:
                 action = guided_action(state,qnet,epsilon=epsilon,action_size=config.action_size)
             next_state, reward, done, _ = env.step(action.item())

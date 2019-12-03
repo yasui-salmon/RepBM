@@ -119,7 +119,7 @@ if __name__ == "__main__":
             reward = Tensor([reward])
 
             if done:
-                reward = Tensor([500-n_steps])
+                reward = Tensor([499-n_steps])
             else:
                 reward = Tensor([0])
 
