@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     num_method = len(methods)
     max_name_length = len(max(methods,key=len))
-    result_parallel = Parallel(n_jobs=-1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, bhv_qnet, seedvec, max_name_length) for i in range(config.N)])
+    result_parallel = Parallel(n_jobs=1)([delayed(parallel_train_pipeline)(config, methods, env, eval_qnet, bhv_qnet, seedvec, max_name_length) for i in range(config.N)])
     mse = np.vstack(x[0] for x in result_parallel)
     mse_ind = np.vstack(x[1] for x in result_parallel)
     mse_w = np.vstack(x[2] for x in result_parallel)

@@ -264,7 +264,7 @@ def mdpmodel_test(memory, mdpnet, loss_mode, config):
 def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     mdpnet.train()
     # Adapted from pytorch tutorial example code
-    if config.train_batch_size > len(memory):
+    if config.policy_train_batch_size > len(memory):
         return
     transitions = memory.sample(config.train_batch_size)
     time = transitions[0].time
@@ -289,23 +289,24 @@ def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     rep, predict_pizero_value = mdpnet(states.type(Tensor)) #output pizero for DML
     predict_pizero_value = predict_pizero_value#.gather(1, actions).squeeze() #predict pizero for DML
 
-    sum_factual = sum([t.factual[0] for t in transitions])
-    sum_control = sum([t.last_factual[0] for t in transitions])
-    if sum_factual > 0 and sum_control > 0:
-        factual_index = LongTensor([i for i, t in enumerate(transitions) if t.factual[0] == 1])
-        last_factual_index = LongTensor([i for i, t in enumerate(transitions) if t.last_factual[0] == 1])
-        factual_rep = rep.index_select(0,factual_index)
-        control_rep = rep.index_select(0,last_factual_index)
-        loss_rep = mmd_lin(factual_rep, control_rep)
-    else:
-        loss_rep = 0
+    # sum_factual = sum([t.factual[0] for t in transitions])
+    # sum_control = sum([t.last_factual[0] for t in transitions])
+    # if sum_factual > 0 and sum_control > 0:
+    #     factual_index = LongTensor([i for i, t in enumerate(transitions) if t.factual[0] == 1])
+    #     last_factual_index = LongTensor([i for i, t in enumerate(transitions) if t.last_factual[0] == 1])
+    #     factual_rep = rep.index_select(0,factual_index)
+    #     control_rep = rep.index_select(0,last_factual_index)
+    #     loss_rep = mmd_lin(factual_rep, control_rep)
+    # else:
+    #     loss_rep = 0
 
     # Compute loss
     #print(predict_pizero_value, actions_label)
 
     m = torch.nn.LogSoftmax(dim=1)
-
     loss = torch.nn.NLLLoss()(m(predict_pizero_value), actions_label)  # added pizero prediction
+
+    print(loss)
 
     # Optimize the model
     optimizer.zero_grad()
@@ -724,6 +725,7 @@ def rollout_batch_pz(init_states, mdpnet, is_done, num_rollout, policy_qnet, eps
     rep, pizero = mdpnet.forward(states_re.type(Tensor))  # result of prediction?
 
     m = torch.nn.Softmax(dim = 1)
+
     pizero_prob_mat = m(pizero.detach())
 
     action_sq = actions.squeeze()
@@ -1217,7 +1219,6 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
 
 
     print('Learn pizero model')
-    mdpnet_dml = Policynet(config)
     best_train_loss = 100
     lr = config.lr
     dev_loss_vec = np.zeros(100)
@@ -1237,11 +1238,16 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec = None):
 
         dev_loss_vec[i_episode] = dev_loss
 
-        if (i_episode > 20) & (dev_loss_vec[i_episode - 20] < dev_loss):
+        if train_loss < best_train_loss:
             best_train_loss = train_loss
-            break
         else:
             lr *= config.lr_decay
+
+        # if (i_episode > 20) & (dev_loss_vec[i_episode - 20] < dev_loss):
+        #     best_train_loss = train_loss
+        #     break
+        # else:
+        #     lr *= config.lr_decay
 
 
     print('Learn RepBM mdp model')

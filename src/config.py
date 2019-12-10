@@ -368,7 +368,8 @@ class acrobot_config():
     # policy net parameter
     policy_train_num_episodes = 100 #100 or 1024
     policy_train_num_batches = 100 #100
-    policy_lr = 0.05
+    policy_lr = 0.001
+    policy_train_batch_size = 256
 
     # MRDR parameter
     soften_epsilon = 0.02
@@ -381,5 +382,5 @@ class acrobot_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 100
+    N = 1
     MAX_SEED = 1000000
