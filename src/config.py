@@ -382,5 +382,5 @@ class acrobot_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 1
+    N = 100
     MAX_SEED = 1000000
