@@ -13,4 +13,4 @@ venv/
 full_imputed_data/
 hiv_domain/hiv_results
 hiv_domain/*.pkl
-result_df.csv
+*.csv
