@@ -1,6 +1,7 @@
 import math
 import random
 from collections import deque
+import pandas as pd
 
 import gym
 import numpy as np
@@ -11,6 +12,9 @@ from src.config import acrobot_config
 from src.models import QNet
 from src.utils import save_qnet, select_maxq_action
 from src.memory import ReplayMemory, Transition
+
+import warnings
+warnings.filterwarnings('ignore')
 
 # if gpu is to be used
 use_cuda = False #torch.cuda.is_available()
@@ -99,7 +103,9 @@ if __name__ == "__main__":
     scores = deque(maxlen=100)
     dp_scores = deque(maxlen=100)
     reward_score = deque(maxlen=100)
-    optimizer = optim.Adam(qnet.parameters(),lr=config.dqn_alpha)#
+    optimizer = optim.Adam(qnet.parameters(),lr=config.dqn_alpha)
+
+    learning_result = []
 
     criterion = torch.nn.MSELoss()
     for i_episode in range(config.dqn_num_episodes):
@@ -133,6 +139,7 @@ if __name__ == "__main__":
         state = preprocess_state(env.reset(), config.state_dim)
         done = False
         n_steps = 0
+
         while not done:
             # Select and perform an action
             action = select_maxq_action(state, qnet)
@@ -152,12 +159,18 @@ if __name__ == "__main__":
         mean_reward = np.mean(reward_score)
 
         loss = replay_and_optim(memory, qnet, target_net, optimizer, criterion, config)
-        if mean_score < 160 and i_episode >= 100:
+
+        if mean_reward > 420 and i_episode >= 100:
             print('Ran {} episodes. Solved after {} trials ✔'.format(i_episode, i_episode - 100))
             break
+
         if i_episode % 100 == 0:
             print('[Episode {}] - Mean survival time over last 100 episodes was {} ticks. Epsilon is {:.3e}. Loss is {:.3e}. reward is {}'
                   .format(i_episode, mean_score, epsilon, loss, mean_reward))
+
+            out = {"i_episode":i_episode, "mean_score": mean_score, "epsilon":epsilon, "loss":loss, "mean_reward":mean_reward}
+            learning_result.append(out)
+            pd.DataFrame(learning_result).to_csv("qlearning_acrobat_lr.csv")
         # update
         epsilon = epsilon_decay_per_ep(i_episode,config)
     save_qnet(state={'state_dict': qnet.state_dict()})
