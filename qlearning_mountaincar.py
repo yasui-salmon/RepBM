@@ -12,6 +12,10 @@ from src.models import QNet
 from src.utils import save_qnet, select_maxq_action
 from src.memory import ReplayMemory, Transition
 
+
+import warnings
+warnings.filterwarnings('ignore')
+
 # if gpu is to be used
 use_cuda = False #torch.cuda.is_available()
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -137,7 +141,7 @@ if __name__ == "__main__":
         mean_score = np.mean(dp_scores)
 
         loss = replay_and_optim(memory, qnet, target_net, optimizer, criterion, config)
-        if mean_score < 160 and i_episode >= 100:
+        if mean_score < 100 and i_episode >= 100:
             print('Ran {} episodes. Solved after {} trials ✔'.format(i_episode, i_episode - 100))
             break
         if i_episode % 100 == 0:
@@ -145,7 +149,7 @@ if __name__ == "__main__":
                   .format(i_episode, mean_score, epsilon, loss))
         # update
         epsilon = epsilon_decay_per_ep(i_episode,config)
-    save_qnet(state={'state_dict': qnet.state_dict()})
+    save_qnet(state={'state_dict': qnet.state_dict()}, checkpoint='target_policies', filename='mountaincar.pth.tar')
 
     groundtruth = deque()
     for i_episode in range(1000):

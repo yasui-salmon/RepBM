@@ -138,7 +138,7 @@ class mountaincar_config():
     # domain parameters
     state_dim = 2
     action_size = 3
-    gamma = 0.99
+    gamma = 0.99 #not in used
     max_length = 200
     oracle_reward = -1
     rescale = [[1, 10]]
@@ -147,10 +147,10 @@ class mountaincar_config():
     dqn_batch_size = 256
     dqn_hidden_dims = [100]
     dqn_num_episodes = 10000
-    buffer_capacity = 20000
-    dqn_alpha = 0.01
-    dqn_epsilon = 0.5
-    dqn_epsilon_min = 0.05
+    buffer_capacity = 300000
+    dqn_alpha = 0.005
+    dqn_epsilon = 1
+    dqn_epsilon_min = 0.01
     dqn_epsilon_decay = 0.9995
     sample_capacity = 200000
     target_update = 10
@@ -327,10 +327,10 @@ class acrobot_config():
     dqn_hidden_dims = [100]#[100]
     dqn_num_episodes = 10000
     buffer_capacity = 300000
-    dqn_alpha = 0.01
+    dqn_alpha = 0.0009
     dqn_epsilon = 1
     dqn_epsilon_min = 0.05
-    dqn_epsilon_decay = 0.9997
+    dqn_epsilon_decay = 0.99 # 0.9995
     sample_capacity = 200000
     target_update = 10
 

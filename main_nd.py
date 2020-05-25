@@ -56,18 +56,6 @@ if __name__ == "__main__":
     load_qnet(bhv_qnet, filename='qnet.pth.tar') # target policy
     bhv_qnet.eval() # 読み込んだモデルのモードを切り替える
 
-    # methods = ['Model', 'DR', 'DML_RepBM', 'DML_RepBM_estpz', 'DML_RepBM_estpz_wis','DML_RepBM_estpz_sis',  'DML_RepBM_estpz_swis',
-    #            'DML-DR-CROSS-K-ND', 'dml_dr_cross_k_estpz_nd', 'dml_dr_cross_k_estpz_wis_nd', 'dml_dr_cross_k_estpz_sis_nd', 'dml_dr_cross_k_estpz_swis_nd','dml_dr_cross_k_chunk_nd',
-    #            'WDR', 'Soft DR', 'Soft WDR',
-    #            'Model Bsl', 'DR Bsl', 'DR EstPz Bsl', 'WDR EstPz Bsl','WDR Bsl', 'Soft DR Bsl', 'Soft WDR Bsl',
-    #            'Model MSE','DR MSE', 'WDR MSE', 'Soft DR MSE', 'Soft WDR MSE',
-    #
-    #            'dr_estpz', 'wdr_estpz', 'sdr_estpz', 'swdr_estpz',
-    #            'dr_msepi_estpz', 'wdr_msepi_estpz', 'sdr_msepi_estpz', 'swdr_msepi_estpz',
-    #
-    #            'MRDR Q', 'MRDR', 'WMRDR', 'Soft MRDR', 'Soft WMRDR',
-    #            'MRDR-w Q', 'MRDR-w', 'WMRDR-w', 'Soft MRDR-w', 'Soft WMRDR-w',
-    #            'IS', 'WIS', 'Soft IS', 'Soft WIS', 'PDIS', 'WPDIS', 'Soft PDIS', 'Soft WPDIS']
 
     methods = ['DML-DR-CROSS-K-ND',
                'dml_dr_cross_k_estpz_nd',

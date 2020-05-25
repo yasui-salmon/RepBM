@@ -173,7 +173,7 @@ if __name__ == "__main__":
             pd.DataFrame(learning_result).to_csv("qlearning_acrobat_lr.csv")
         # update
         epsilon = epsilon_decay_per_ep(i_episode,config)
-    save_qnet(state={'state_dict': qnet.state_dict()})
+    save_qnet(state={'state_dict': qnet.state_dict()}, checkpoint='target_policies', filename='acrobat.pth.tar')
 
     groundtruth = deque()
     for i_episode in range(1000):
