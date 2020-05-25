@@ -346,7 +346,7 @@ class acrobot_config():
     transition_hidden_dims = []
     reward_hidden_dims = []
     terminal_hidden_dims = [32,32]
-    behavior_epsilon = 0.1
+    behavior_epsilon = 0.05
     eval_epsilon = 0.0
 
 
@@ -382,5 +382,5 @@ class acrobot_config():
 
     eval_num_traj = 1000
     eval_num_rollout = 1
-    N = 100
+    N = 180
     MAX_SEED = 1000000
