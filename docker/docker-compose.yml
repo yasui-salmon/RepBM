@@ -8,4 +8,4 @@ services:
     container_name: python
     tty: true
     volumes:
-      - ../:/var/www/html
+      - ../:/RepBM/
