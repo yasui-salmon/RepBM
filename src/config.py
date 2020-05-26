@@ -335,12 +335,12 @@ class acrobot_config():
     target_update = 10
 
     # model parameters
-    fold_num = 4
+    fold_num = 2
 
     sample_num_traj = 1024
     sample_num_traj_eval = sample_num_traj
-    train_num_traj = 768
-    dev_num_traj = 256
+    train_num_traj = 512
+    dev_num_traj = 512
     transition_input_dims = 4
     rep_hidden_dims = [16] # The last dim is the representation dim
     transition_hidden_dims = []
