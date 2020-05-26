@@ -5,7 +5,7 @@ services:
       context: ../
       dockerfile: ./docker/Dockerfile
     image: python:3.8
-    container_name: python
+    container_name: dml
     tty: true
     volumes:
       - ../:/RepBM/
