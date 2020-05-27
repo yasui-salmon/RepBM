@@ -143,6 +143,10 @@ def mrdr_test(samples, qnet, loss_mode, config, permutation, i_batch, wis_reward
 
 
 def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
+
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     mdpnet.train()
     # Adapted from pytorch tutorial example code
     if config.train_batch_size > len(memory):
@@ -168,7 +172,7 @@ def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     # Compute T(s_t, a) - the model computes T(s_t), then we select the
     # columns of actions taken
     expanded_actions = actions.unsqueeze(2)  # batch_size x 1 x 1
-    expanded_actions = expanded_actions.expand(-1, -1, config.state_dim)  # batch_size x 1 x state_dim
+    expanded_actions = expanded_actions.expand(-1, -1, state_dim)  # batch_size x 1 x state_dim
 
     predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
     # predict_state_diff = batch_size x 2 x state_dim
@@ -212,6 +216,9 @@ def mdpmodel_train(memory, mdpnet, optimizer, loss_mode, config):
 
 def mdpmodel_test(memory, mdpnet, loss_mode, config):
     mdpnet.eval()
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     # Adapted from pytorch tutorial example code
     if config.test_batch_size > len(memory):
         return
@@ -240,7 +247,7 @@ def mdpmodel_test(memory, mdpnet, loss_mode, config):
     # Compute T(s_t, a) - the model computes T(s_t), then we select the
     # columns of actions taken
     expanded_actions = actions.unsqueeze(2)
-    expanded_actions = expanded_actions.expand(-1, -1, config.state_dim)
+    expanded_actions = expanded_actions.expand(-1, -1, state_dim)
     predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
     predict_state_diff = predict_state_diff.gather(1, expanded_actions).squeeze()
     predict_reward_value = predict_reward_value.gather(1, actions).squeeze()
@@ -271,6 +278,9 @@ def mdpmodel_test(memory, mdpnet, loss_mode, config):
 
 def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     mdpnet.train()
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     # Adapted from pytorch tutorial example code
     if config.policy_train_batch_size > len(memory):
         return
@@ -291,7 +301,7 @@ def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
     # Compute T(s_t, a) - the model computes T(s_t), then we select the
     # columns of actions taken
     expanded_actions = actions.unsqueeze(2)  # batch_size x 1 x 1
-    expanded_actions = expanded_actions.expand(-1, -1, config.state_dim)  # batch_size x 1 x state_dim
+    expanded_actions = expanded_actions.expand(-1, -1, state_dim)  # batch_size x 1 x state_dim
 
     # predict_state_diff, predict_reward_value, rep = mdpnet(states.type(Tensor))
     rep, predict_pizero_value = mdpnet(states.type(Tensor))  # output pizero for DML
@@ -327,6 +337,9 @@ def pzmodel_train(memory, mdpnet, optimizer, loss_mode, config):
 
 def pzmodel_test(memory, mdpnet, loss_mode, config):
     mdpnet.eval()
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     # Adapted from pytorch tutorial example code
     if config.test_batch_size > len(memory):
         return
@@ -355,7 +368,7 @@ def pzmodel_test(memory, mdpnet, loss_mode, config):
     # Compute T(s_t, a) - the model computes T(s_t), then we select the
     # columns of actions taken
     expanded_actions = actions.unsqueeze(2)
-    expanded_actions = expanded_actions.expand(-1, -1, config.state_dim)
+    expanded_actions = expanded_actions.expand(-1, -1, state_dim)
     rep, predict_pizero_value = mdpnet(states.type(Tensor))
     # predict_pizero_value = predict_pizero_value#.gather(1, actions).squeeze()  # predict pizero for DML
 
@@ -420,6 +433,10 @@ def terminal_classifier_test(memory, model, batch_size):
 
 def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilon, action_size, maxlength, config,
                   init_done=None, init_actions=None):
+
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     ori_batch_size = init_states.size()[0]
     state_dim = init_states.size()[1]
     batch_size = init_states.size()[0] * num_rollout
@@ -453,7 +470,7 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
         expanded_actions = expanded_actions.expand(-1, -1, state_dim)
 
         states_diff = states_diff.gather(1, expanded_actions).squeeze()
-        states_diff = states_diff.view(-1, config.state_dim)
+        states_diff = states_diff.view(-1, state_dim)
         states_diff = 1 / torch.tensor(np.float32(config.rescale)) * states_diff
         next_states = states_diff + torch.tensor(states)
         states = next_states
@@ -470,8 +487,10 @@ def rollout_batch(init_states, mdpnet, is_done, num_rollout, policy_qnet, epsilo
 def reward_prediction(traj_set, mdpnet, max_length, config, soften=False):
     num_samples = len(traj_set)
     traj_len = np.zeros(num_samples, 'int')
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
 
-    state_tensor = FloatTensor(num_samples, max_length, config.state_dim).zero_()
+    state_tensor = FloatTensor(num_samples, max_length, state_dim).zero_()
     action_tensor = LongTensor(num_samples, max_length, 1).zero_()
     pie_tensor = FloatTensor(num_samples, max_length, config.action_size).zero_()
     done_tensor = ByteTensor(num_samples, max_length).fill_(1)
@@ -518,9 +537,12 @@ def reward_prediction(traj_set, mdpnet, max_length, config, soften=False):
 
 def compute_values(traj_set, model, is_done, policy_qnet, config, max_length, model_type='MDP',
                    soften=False):  # ここでpizeroの予測値を返す様にする
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     num_samples = len(traj_set)
     traj_len = np.zeros(num_samples, 'int')
-    state_tensor = FloatTensor(num_samples, max_length, config.state_dim).zero_()
+    state_tensor = FloatTensor(num_samples, max_length, state_dim).zero_()
     action_tensor = LongTensor(num_samples, max_length, 1).zero_()
     pie_tensor = FloatTensor(num_samples, max_length, config.action_size).zero_()
     done_tensor = ByteTensor(num_samples, max_length).fill_(1)
@@ -613,11 +635,13 @@ def compute_values(traj_set, model, is_done, policy_qnet, config, max_length, mo
 
 def compute_values_dml(traj_set, model, is_done, policy_qnet, config, max_length, model_type='MDP',
                        soften=False):  # ここでpizeroの予測値を返す様にする
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
 
     num_samples = len(traj_set)
 
     traj_len = np.zeros(num_samples, 'int')
-    state_tensor = FloatTensor(num_samples, max_length, config.state_dim).zero_()
+    state_tensor = FloatTensor(num_samples, max_length, state_dim).zero_()
     action_tensor = LongTensor(num_samples, max_length, 1).zero_()
     pie_tensor = FloatTensor(num_samples, max_length, config.action_size).zero_()
     done_tensor = ByteTensor(num_samples, max_length).fill_(1)
@@ -751,9 +775,12 @@ def rollout_batch_pz(init_states, mdpnet, is_done, num_rollout, policy_qnet, eps
 
 
 def compute_pizero(traj_set, model, is_done, policy_qnet, config, model_type='MDP', soften=False):
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     num_samples = len(traj_set)
     traj_len = np.zeros(num_samples, 'int')
-    state_tensor = FloatTensor(num_samples, config.max_length, config.state_dim).zero_()
+    state_tensor = FloatTensor(num_samples, config.max_length, state_dim).zero_()
     action_tensor = LongTensor(num_samples, config.max_length, 1).zero_()
     pie_tensor = FloatTensor(num_samples, config.max_length, config.action_size).zero_()
     done_tensor = ByteTensor(num_samples, config.max_length).fill_(1)
@@ -1008,6 +1035,9 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
     dev_memory = SampleSet(config)
     pz_memory = SampleSet(config)
 
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
     fold_num = config.fold_num
     rep_memory_k = [SampleSet(config) for i in range(fold_num)]
     rep_dev_memory_k = [SampleSet(config) for i in range(fold_num)]
@@ -1023,8 +1053,8 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
     mdpnet = MDPnet(config)  # doubly robustで使う
     mdpnet_unweight = MDPnet(config)
 
-    mrdr_q = QtNet(config.state_dim, config.mrdr_hidden_dims, config.action_size)
-    mrdrv2_q = QtNet(config.state_dim, config.mrdr_hidden_dims, config.action_size)
+    mrdr_q = QtNet(state_dim, config.mrdr_hidden_dims, config.action_size)
+    mrdrv2_q = QtNet(state_dim, config.mrdr_hidden_dims, config.action_size)
     mdpnet_dml = Policynet(config)
     time_pre = time.time()
 
@@ -1041,7 +1071,10 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
         # Initialize the environment and state
         randseed = seedvec[i_episode].item()
         env.seed(randseed)
-        state = preprocess_state(env.reset(), config.state_dim)  # stateを行列にしてtensor形式にする i_episodeごとに環境をリセットしている
+
+        state = np.append(env.reset(), np.random.normal(size = noise_dim))
+        state = preprocess_state(state, state_dim)  # stateを行列にしてtensor形式にする i_episodeごとに環境をリセットしている
+
         done = False
         n_steps = 0
         acc_soft_isweight = FloatTensor([1])
@@ -1077,8 +1110,10 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
             factual = factual * p_pie[:, action.item()]  # 1{a_{0:t}==\pie}
 
             next_state, reward, done, _ = env.step(action.item())  # action の実行 (doneはここで更新される）
+            next_state = np.append(next_state, np.random.normal(size = noise_dim))
+
             reward = Tensor([reward])  # 報酬をtensor形式にしておく
-            next_state = preprocess_state(next_state, config.state_dim)  # 次のstateの保存形式を変更
+            next_state = preprocess_state(next_state, state_dim)  # 次のstateの保存形式を変更
             next_state_re = torch.tensor(np.float32(config.rescale)) * next_state  # stateをrescaleする
             state_re = torch.tensor(np.float32(config.rescale)) * state  # stateをrescaleする
 
@@ -1357,7 +1392,9 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
     init_states = []
     for i_episode in range(config.sample_num_traj):
         env.seed(seedvec[i_episode].item())
-        init_states.append(preprocess_state(env.reset(), config.state_dim))
+        state = env.reset()
+        state = np.append(state, np.random.normal(size = noise_dim))
+        init_states.append(preprocess_state(state, state_dim))
     init_states = torch.cat(init_states)
 
     # RepBM model with representation loss
@@ -1618,7 +1655,7 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
         values = deque()
         for i_trials in range(1):
             env.seed(seedvec[i_episode].item())
-            state = preprocess_state(env.reset(), config.state_dim)
+            state = preprocess_state(np.append(env.reset(), np.random.normal(size = noise_dim)), state_dim)
             true_state = state
             true_done = False
             true_steps = 0
@@ -1626,7 +1663,7 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
             while not true_done:
                 true_action = epsilon_greedy_action(true_state, eval_qnet, 0, config.action_size)
                 true_next_state, true_reward, true_done, _ = env.step(true_action.item())
-                true_state = preprocess_state(true_next_state, config.state_dim)
+                true_state = preprocess_state(np.append(true_next_state, np.random.normal(size = noise_dim)), state_dim)
                 true_steps += 1
                 true_rewards += true_reward
             values.append(true_rewards)

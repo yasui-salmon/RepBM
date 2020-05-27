@@ -48,12 +48,16 @@ def parallel_train_pipeline(config, methods, env, eval_qnet, bhv_qnet, seedvec, 
 if __name__ == "__main__":
     env = gym.make("Acrobot-v1")
     config = acrobot_config
-    eval_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
-    load_qnet(eval_qnet, filename='qnet.pth.tar') # target policy
+
+    noise_dim = config.noise_dim
+    state_dim = config.state_dim + noise_dim
+
+    eval_qnet = QNet(state_dim, config.dqn_hidden_dims, config.action_size)
+    load_qnet(eval_qnet, filename='acrobat.pth.tar') # target policy
     eval_qnet.eval() # 読み込んだモデルのモードを切り替える
 
-    bhv_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
-    load_qnet(bhv_qnet, filename='qnet.pth.tar') # target policy
+    bhv_qnet = QNet(state_dim, config.dqn_hidden_dims, config.action_size)
+    load_qnet(bhv_qnet, filename='acrobat.pth.tar') # target policy
     bhv_qnet.eval() # 読み込んだモデルのモードを切り替える
 
 

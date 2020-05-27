@@ -316,18 +316,21 @@ class gpu_config():
 class acrobot_config():
     # domain parameters
     state_dim = 6
+
+    noise_dim = 2
+
     action_size = 3
     gamma = 0.99
     max_length = 500
     oracle_reward = -1
-    rescale = [[1,1,1,1,1,1]]
+    rescale = [[1,1,1,1,1,1,1,1]]
 
     # q training parameters
     dqn_batch_size = 256
     dqn_hidden_dims = [100]#[100]
-    dqn_num_episodes = 10000
+    dqn_num_episodes = 15000
     buffer_capacity = 300000
-    dqn_alpha = 0.0009
+    dqn_alpha = 0.0005
     dqn_epsilon = 1
     dqn_epsilon_min = 0.05
     dqn_epsilon_decay = 0.99 # 0.9995

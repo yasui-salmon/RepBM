@@ -55,9 +55,12 @@ class Policynet(nn.Module):
         super(Policynet, self).__init__()
         self.config = config
 
+        noise_dim = config.noise_dim
+        state_dim = config.state_dim + noise_dim
+
         # representation
         mlp_layers = []
-        prev_hidden_size = config.state_dim
+        prev_hidden_size = state_dim
         for next_hidden_size in config.rep_hidden_dims:
             mlp_layers.extend([
                 nn.Linear(prev_hidden_size, next_hidden_size),
@@ -92,9 +95,12 @@ class MDPnet(nn.Module):
     def __init__(self, config):
         super(MDPnet, self).__init__()
         self.config = config
+        noise_dim = config.noise_dim
+        state_dim = config.state_dim + noise_dim
+
         # representation
         mlp_layers = []
-        prev_hidden_size = config.state_dim
+        prev_hidden_size = state_dim
         for next_hidden_size in config.rep_hidden_dims:
             mlp_layers.extend([
                 nn.Linear(prev_hidden_size, next_hidden_size),
@@ -113,7 +119,7 @@ class MDPnet(nn.Module):
             ])
             prev_hidden_size = next_hidden_size
         mlp_layers.append(
-            nn.Linear(prev_hidden_size,config.action_size*config.state_dim)
+            nn.Linear(prev_hidden_size,config.action_size*state_dim)
         )
         self.transition = nn.Sequential(*mlp_layers)
 
@@ -133,7 +139,7 @@ class MDPnet(nn.Module):
 
     def forward(self,state):
         rep = self.representation(state) #stateを入力してrepresentationを得る
-        next_state_diff = self.transition(rep).view(-1,self.config.action_size,self.config.state_dim)
+        next_state_diff = self.transition(rep).view(-1,self.config.action_size,self.config.state_dim+self.config.noise_dim)
         reward = self.reward(rep).view(-1, self.config.action_size) # viewでn*action_sizeの行列に整形する
         #soft_done = self.terminal(state)
         return next_state_diff, reward, rep
@@ -159,9 +165,11 @@ class TerminalClassifier(nn.Module):
     def __init__(self, config):
         super(TerminalClassifier, self).__init__()
         self.config = config
+        noise_dim = config.noise_dim
+        state_dim = config.state_dim + noise_dim
 
         mlp_layers = []
-        prev_hidden_size = self.config.state_dim #self.config.rep_hidden_dims[-1]
+        prev_hidden_size = state_dim #self.config.rep_hidden_dims[-1]
         for next_hidden_size in config.terminal_hidden_dims:
             mlp_layers.extend([
                 nn.Linear(prev_hidden_size, next_hidden_size),
