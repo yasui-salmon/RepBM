@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
         loss = replay_and_optim(memory, qnet, target_net, optimizer, criterion, config)
 
-        if mean_reward > 420 and i_episode >= 100:
+        if mean_reward > 400 and i_episode >= 100:
             print('Ran {} episodes. Solved after {} trials ✔'.format(i_episode, i_episode - 100))
             break
 

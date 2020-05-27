@@ -317,20 +317,20 @@ class acrobot_config():
     # domain parameters
     state_dim = 6
 
-    noise_dim = 2
+    noise_dim = 4
 
     action_size = 3
     gamma = 0.99
     max_length = 500
     oracle_reward = -1
-    rescale = [[1,1,1,1,1,1,1,1]]
+    rescale = [[1,1,1,1,1,1,1,1,1,1]]
 
     # q training parameters
     dqn_batch_size = 256
     dqn_hidden_dims = [100]#[100]
-    dqn_num_episodes = 15000
+    dqn_num_episodes = 10000
     buffer_capacity = 300000
-    dqn_alpha = 0.0005
+    dqn_alpha = 0.0001
     dqn_epsilon = 1
     dqn_epsilon_min = 0.05
     dqn_epsilon_decay = 0.99 # 0.9995
@@ -363,7 +363,7 @@ class acrobot_config():
     tc_num_batches = 100
     tc_batch_size = 64
     tc_test_batch_size = 16
-    lr = 0.01
+    lr = 0.05
     lr_decay = 0.9
     alpha_rep = 0.1
     weight_decay = 0.00005
