@@ -6,7 +6,7 @@ import gym
 import pandas as pd
 from src.models import QNet
 from src.config import cartpole_config
-from src.train_pipeline import train_pipeline
+from src.train_pipeline_cp import train_pipeline
 from src.utils import load_qnet, error_info
 from src.utils import load_qnet, error_info_step
 from collections import deque
@@ -48,26 +48,49 @@ def parallel_train_pipeline(config, methods, env, eval_qnet, bhv_qnet, seedvec, 
 if __name__ == "__main__":
     env = gym.make("CartPole-v0")
     config = cartpole_config
-    eval_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
-    load_qnet(eval_qnet, filename='qnet_cp_short.pth.tar') # target policy
+    state_dim = config.state_dim + config.noise_dim
+    eval_qnet = QNet(state_dim, config.dqn_hidden_dims, config.action_size)
+    load_qnet(eval_qnet, filename='cp_s.pth.tar') # target policy
     eval_qnet.eval() # 読み込んだモデルのモードを切り替える
 
-    bhv_qnet = QNet(config.state_dim, config.dqn_hidden_dims, config.action_size)
-    load_qnet(bhv_qnet, filename='qnet.pth.tar') # target policy
+    bhv_qnet = QNet(state_dim, config.dqn_hidden_dims, config.action_size)
+    load_qnet(bhv_qnet, filename='cp_s.pth.tar') # target policy
     bhv_qnet.eval() # 読み込んだモデルのモードを切り替える
 
-    methods = ['Model', 'DR', 'DML_RepBM', 'DML_RepBM_estpz', 'DML_RepBM_estpz_wis','DML_RepBM_estpz_sis',  'DML_RepBM_estpz_swis',
-               'DML-DR-CROSS-K-ND', 'dml_dr_cross_k_estpz_nd', 'dml_dr_cross_k_estpz_wis_nd', 'dml_dr_cross_k_estpz_sis_nd', 'dml_dr_cross_k_estpz_swis_nd','dml_dr_cross_k_chunk_nd',
-               'WDR', 'Soft DR', 'Soft WDR',
-               'Model Bsl', 'DR Bsl', 'DR EstPz Bsl', 'WDR EstPz Bsl','WDR Bsl', 'Soft DR Bsl', 'Soft WDR Bsl',
-               'Model MSE','DR MSE', 'WDR MSE', 'Soft DR MSE', 'Soft WDR MSE',
+    methods = ['DML-DR-CROSS-K-ND',
+               'dml_dr_cross_k_estpz_nd',
+               'dml_dr_cross_k_estpz_wis_nd',
+               'dml_dr_cross_k_estpz_sis_nd',
+               'dml_dr_cross_k_estpz_swis_nd',
+               'dml_dr_cross_k_chunk_nd',
+               'Model Bsl',
+               'DR Bsl',
+               'DR EstPz Bsl',
+               'WDR EstPz Bsl',
+               'WDR Bsl',
+               'Soft DR Bsl',
+               'Soft WDR Bsl',
+               'IS',
+               'WIS',
+               'Soft IS',
+               'Soft WIS',
+               'PDIS',
+               'WPDIS',
+               'Soft PDIS',
+               'Soft WPDIS']
 
-               'dr_estpz', 'wdr_estpz', 'sdr_estpz', 'swdr_estpz',
-               'dr_msepi_estpz', 'wdr_msepi_estpz', 'sdr_msepi_estpz', 'swdr_msepi_estpz',
-
-               'MRDR Q', 'MRDR', 'WMRDR', 'Soft MRDR', 'Soft WMRDR',
-               'MRDR-w Q', 'MRDR-w', 'WMRDR-w', 'Soft MRDR-w', 'Soft WMRDR-w',
-               'IS', 'WIS', 'Soft IS', 'Soft WIS', 'PDIS', 'WPDIS', 'Soft PDIS', 'Soft WPDIS']
+    # methods = ['Model', 'DR', 'DML_RepBM', 'DML_RepBM_estpz', 'DML_RepBM_estpz_wis','DML_RepBM_estpz_sis',  'DML_RepBM_estpz_swis',
+    #            'DML-DR-CROSS-K-ND', 'dml_dr_cross_k_estpz_nd', 'dml_dr_cross_k_estpz_wis_nd', 'dml_dr_cross_k_estpz_sis_nd', 'dml_dr_cross_k_estpz_swis_nd','dml_dr_cross_k_chunk_nd',
+    #            'WDR', 'Soft DR', 'Soft WDR',
+    #            'Model Bsl', 'DR Bsl', 'DR EstPz Bsl', 'WDR EstPz Bsl','WDR Bsl', 'Soft DR Bsl', 'Soft WDR Bsl',
+    #            'Model MSE','DR MSE', 'WDR MSE', 'Soft DR MSE', 'Soft WDR MSE',
+    #
+    #            'dr_estpz', 'wdr_estpz', 'sdr_estpz', 'swdr_estpz',
+    #            'dr_msepi_estpz', 'wdr_msepi_estpz', 'sdr_msepi_estpz', 'swdr_msepi_estpz',
+    #
+    #            'MRDR Q', 'MRDR', 'WMRDR', 'Soft MRDR', 'Soft WMRDR',
+    #            'MRDR-w Q', 'MRDR-w', 'WMRDR-w', 'Soft MRDR-w', 'Soft WMRDR-w',
+    #            'IS', 'WIS', 'Soft IS', 'Soft WIS', 'PDIS', 'WPDIS', 'Soft PDIS', 'Soft WPDIS']
 
     # methods = ['Model', 'DR',
     #            'DML-DR-CROSS-K', 'dml_dr_cross_k_estpz','dml_dr_cross_k_estpz_wis',

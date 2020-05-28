@@ -1,17 +1,18 @@
 class cartpole_config():
     # domain parameters
     state_dim = 4
+    noise_dim = 4
     action_size = 2
     gamma = 1.0
     n_win_ticks = 195
     max_length = 200 #shorter than MRDR experiment
     oracle_reward = 1
-    rescale = [[1, 1, 1, 1]]
+    rescale = [[1, 1, 1, 1, 1, 1, 1, 1]]
 
     # q training parameters
     dqn_batch_size = 64
     dqn_hidden_dims = [24,48]
-    dqn_num_episodes = 200 #2000
+    dqn_num_episodes = 2000 #2000
     buffer_capacity = 10000
     dqn_alpha = 0.01
     dqn_alpha_decay = 0.01
@@ -36,7 +37,7 @@ class cartpole_config():
 
     # model training parameter
     print_per_epi = 10
-    train_num_episodes = 100 #100
+    train_num_episodes = 500 #100
     train_num_batches = 100 #100
     train_batch_size = 64 #64
     test_batch_size = 16
@@ -44,7 +45,7 @@ class cartpole_config():
     tc_num_batches = 100 #100
     tc_batch_size = 64
     tc_test_batch_size = 16
-    lr = 0.01
+    lr = 0.08#0.00001
     lr_decay = 0.9
     alpha_rep = 0.01
     weight_decay = 0
@@ -53,7 +54,7 @@ class cartpole_config():
     policy_train_num_episodes = 100 #100 or 1024
     policy_train_num_batches = 100 #100
     policy_lr = 0.05
-
+    policy_train_batch_size = 256
 
     # MRDR parameter
     soften_epsilon = 0.02
@@ -65,7 +66,7 @@ class cartpole_config():
     mrdr_hidden_dims = [32]
 
     eval_num_rollout = 1
-    N = 100 #should be 100
+    N = 90 #should be 100
     MAX_SEED = 1000000
 
 
