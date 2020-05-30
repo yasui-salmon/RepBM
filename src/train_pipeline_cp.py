@@ -1288,7 +1288,7 @@ def train_pipeline(env, config, eval_qnet, bhv_qnet, seedvec=None):
         optimizer = optim.SGD(mdpnet_dml.parameters(), lr=config.policy_lr, weight_decay=config.weight_decay)
         for i_batch in range(config.policy_train_num_batches):
             train_loss_batch = pzmodel_train(memory, mdpnet_dml, optimizer, 3, config)
-            dev_loss_batch = pzmodel_testpzmodel_test(dev_memory, mdpnet_dml, 3, config)
+            dev_loss_batch = pzmodel_test(dev_memory, mdpnet_dml, 3, config)
 
 
             train_loss = (train_loss * i_batch + train_loss_batch) / (i_batch + 1)
